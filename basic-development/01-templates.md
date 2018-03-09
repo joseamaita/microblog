@@ -161,3 +161,32 @@ the [Jinja2](http://jinja.pocoo.org) templating engine that comes
 bundled with the Flask framework. Jinja2 substitutes `{{ ... }}` blocks 
 with the corresponding values, given by the arguments provided in 
 the `render_template()` call.
+
+### Conditional statements
+
+You have seen how Jinja2 replaces placeholders with actual values during 
+rendering, but this is just one of many powerful operations Jinja2 
+supports in template files. For example, templates also support control 
+statements, given inside `{% ... %}` blocks. The next version of 
+the **index.html** template adds a conditional statement:
+
+```html
+<html>
+    <head>
+        {% if title %}
+        <title>{{ title }} - Microblog</title>
+        {% else %}
+        <title>Welcome to Microblog!</title>
+        {% endif %}
+    </head>
+    <body>
+        <h1>Hello, {{ user.username }}!</h1>
+    </body>
+</html>
+```
+
+Now the template is a bit smarter. If the view function forgets to pass 
+a value for the `title` placeholder variable, then instead of showing an 
+empty title the template will provide a default one. You can try how 
+this conditional works by removing the `title` argument in 
+the `render_template()` call of the view function.
