@@ -190,3 +190,81 @@ a value for the `title` placeholder variable, then instead of showing an
 empty title the template will provide a default one. You can try how 
 this conditional works by removing the `title` argument in 
 the `render_template()` call of the view function.
+
+### Loops
+
+The logged in user will probably want to see recent posts from connected 
+users in the home page, so what I'm going to do now is extend the 
+application to support that.
+
+Once again, I'm going to rely on the handy fake object trick to create 
+some users and some posts to show:
+
+```python
+# app/routes.py: Fake posts in view function
+from flask import render_template
+from app import app
+
+
+@app.route('/')
+@app.route('/index')
+def index():
+    user = {'username': 'José A.'}
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+    return render_template('index.html', 
+                           title = 'Home', 
+                           user = user, 
+                           posts = posts)
+```
+
+To represent user posts I'm using a list, where each element is a 
+dictionary that has `author` and `body` fields. When I get to implement 
+users and blog posts for real I'm going to try to preserve these field 
+names as much as possible, so that all the work I'm doing to design and 
+test the home page template using these fake objects will continue to be 
+valid when I introduce real users and posts.
+
+On the template side I have to solve a new problem. The list of posts 
+can have any number of elements, it is up to the view function to decide 
+how many posts are going to be presented in the page. The template 
+cannot make any assumptions about how many posts there are, so it needs 
+to be prepared to render as many posts as the view sends in a generic 
+way.
+
+For this type of problem, Jinja2 offers a `for` control structure:
+
+```html
+<html>
+    <head>
+        {% if title %}
+        <title>{{ title }} - Microblog</title>
+        {% else %}
+        <title>Welcome to Microblog!</title>
+        {% endif %}
+    </head>
+    <body>
+        <h1>Hi, {{ user.username }}!</h1>
+        {% for post in posts %}
+        <div>
+            <p>{{ post.author.username }} says: <b>{{ post.body }}</b></p>
+        </div>
+        {% endfor %}
+    </body>
+</html>
+```
+
+Simple, right? Give this new version of the application a try, and be 
+sure to play with adding more content to the posts list to see how the 
+template adapts and always renders all the posts the view function 
+sends.
+
+![img](01-templates-e.png)
