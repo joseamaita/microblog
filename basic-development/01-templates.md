@@ -268,3 +268,76 @@ template adapts and always renders all the posts the view function
 sends.
 
 ![img](01-templates-e.png)
+
+### Template inheritance
+
+Most web applications these days have a navigation bar at the top of the 
+page with a few frequently used links, such as a link to edit your 
+profile, to login, logout, etc. I can easily add a navigation bar to 
+the `index.html` template with some more HTML, but as the application 
+grows I will be needing this same navigation bar in other pages. I don't 
+really want to have to maintain several copies of the navigation bar in 
+many HTML templates, it is a good practice to not repeat yourself if 
+that is possible.
+
+Jinja2 has a template inheritance feature that specifically addresses 
+this problem. In essence, what you can do is move the parts of the page 
+layout that are common to all templates to a base template, from which 
+all other templates are derived.
+
+So what I'm going to do now is define a base template called `base.html` 
+that includes a simple navigation bar and also the title logic I 
+implemented earlier. You need to write the following template in 
+file **app/templates/base.html**:
+
+```html
+<html>
+    <head>
+        {% if title %}
+        <title>{{ title }} - Microblog</title>
+        {% else %}
+        <title>Welcome to Microblog!</title>
+        {% endif %}
+    </head>
+    <body>
+        <div>Microblog: <a href="/index">Home</a></div>
+        <hr>
+        {% block content %}{% endblock %}
+    </body>
+</html>
+```
+
+In this template I used the `block` control statement to define the 
+place where the derived templates can insert themselves. Blocks are 
+given a unique name, which derived templates can reference when they 
+provide their content.
+
+With the base template in place, I can now simplify **index.html** by 
+making it inherit from **base.html**:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Hi, {{ user.username }}!</h1>
+    {% for post in posts %}
+    <div>
+        <p>{{ post.author.username }} says: <b>{{ post.body }}</b></p>
+    </div>
+    {% endfor %}
+{% endblock %}
+```
+
+Since the **base.html** template will now take care of the general page 
+structure, I have removed all those elements from **index.html** and 
+left only the content part. The `extends` statement establishes the 
+inheritance link between the two templates, so that Jinja2 knows that 
+when it is asked to render `index.html` it needs to embed it 
+inside `base.html`. The two templates have matching `block` statements 
+with name `content`, and this is how Jinja2 knows how to combine the two 
+templates into one. Now, if I need to create additional pages for the 
+application, I can create them as derived templates from the 
+same **base.html** template, and that is how I can have all the pages of 
+the application sharing the same look and feel without duplication.
+
+![img](01-templates-f.png)
