@@ -19,3 +19,23 @@ and also for logging in to the application.
 Before you proceed here, make sure you have the *microblog* application 
 as I left it in the previous part, and that you can run it without any 
 errors.
+
+### Introduction to Flask-WTF
+
+To handle the web forms in this application, I'm going to use 
+the [Flask-WTF](https://flask-wtf.readthedocs.io/en/stable/) extension, 
+which is a thin wrapper around 
+the [WTForms](https://wtforms.readthedocs.io/en/stable/) package that 
+nicely integrates it with Flask. This is the first Flask extension that 
+I'm presenting to you, but it is not going to be the last. Extensions 
+are a very important part of the Flask ecosystem, as they provide 
+solutions to problems that Flask is intentionally not opinionated about.
+
+Flask extensions are regular Python packages that are installed with 
+pip. You can go ahead and install Flask-WTF on your virtual environment:
+
+```
+$ cd microblog.git/
+$ source venv/bin/activate
+(venv) $ pip install flask-wtf
+```
