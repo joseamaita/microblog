@@ -146,3 +146,42 @@ secret key:
 >>> app.config['SECRET_KEY']
 'ca7e5774383466f46e382229251a83059f3255219a5dbf87309c58d5f6a4c7b1'
 ```
+
+### User Login Form
+
+The Flask-WTF extension uses Python classes to represent web forms. A 
+form class simply defines the fields of the form as class variables.
+
+I'm going to use a new *app/forms.py* module to store these web form 
+classes. To begin with, let's define a user login form, which asks the 
+user to enter a username and a password. The form will also include a 
+"remember me" check box, and a submit button:
+
+```python
+# app/forms.py: Login form
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, BooleanField, SubmitField
+from wtforms.validators import DataRequired
+
+class LoginForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    remember_me = BooleanField('Remember Me')
+    submit = SubmitField('Sign In')
+```
+
+Most Flask extensions use a `flask_<name>` naming convention for their 
+top-level import symbol. In this case, Flask-WTF has all its symbols 
+under `flask_wtf`. This is where the `FlaskForm` base class is imported 
+from at the top of *app/forms.py*.
+
+The four classes that represent the fields that I'm using for this form 
+are imported directly from the WTForms package, since the Flask-WTF 
+extension does not provide customized versions. For each field, an 
+object is created, and given a description or label as first argument.
+
+The optional `validators` argument that you see in some of the fields is 
+used to attach validation behaviors to fields. The `DataRequired` 
+validator simply checks that the field is not submitted empty. There are 
+many more validators available, some of which will be used in other 
+forms.
