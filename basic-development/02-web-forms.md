@@ -185,3 +185,58 @@ used to attach validation behaviors to fields. The `DataRequired`
 validator simply checks that the field is not submitted empty. There are 
 many more validators available, some of which will be used in other 
 forms.
+
+### Form Templates
+
+The next step is to add the form to an HTML template so that it can be 
+rendered on a web page. The good news is that the fields that are 
+defined in the `LoginForm` class know how to render themselves as HTML, 
+so this task is fairly simple. Below you can see the login template, 
+which I'm going to store in file *app/templates/login.html*:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Sign In</h1>
+    <form action="" method="post" name="login">
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.username.label }}<br>
+            {{ form.username(size=32) }}
+        </p>
+        <p>
+            {{ form.password.label }}<br>
+            {{ form.password(size=32) }}
+        </p>
+        <p>{{ form.remember_me() }} {{ form.remember_me.label }}</p>
+        <p>{{ form.submit() }}</p>
+    </form>
+{% endblock %}
+```
+
+For this template I'm reusing one more time the `base.html` template, 
+through the `extends` template inheritance statement. I will actually do 
+this with all the templates, to ensure a consistent layout that includes 
+a top navigation bar across all the pages of the application.
+
+This template expects a form object instantiated from the `LoginForm` 
+class to be given as an argument, which you can see referenced 
+as `form`. This argument will be sent by the login view function, which 
+does not exist yet.
+
+The `form.hidden_tag()` template argument generates a hidden field that 
+includes a token that is used to protect the form against CSRF attacks. 
+All you need to do to have the form protected is include this hidden 
+field, and Flask-WTF does the rest.
+
+If you've written HTML web forms in the past, you may have found it odd 
+that there are no HTML fields in this template. This is because the 
+fields from the form object know how to render themselves as HTML. All I 
+needed to do was to include `{{ form.<field_name>.label}}` where I 
+wanted the field label, and `{{ form.<field_name>() }}` where I wanted 
+the field. For fields that require additional HTML attributes, those can 
+be passed as arguments. The username and password fields in this 
+template take the `size` as an argument that will be added to 
+the `<input>` HTML element as an attribute. This is how you can also 
+attach CSS classes or IDs to form fields.
