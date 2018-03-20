@@ -240,3 +240,84 @@ be passed as arguments. The username and password fields in this
 template take the `size` as an argument that will be added to 
 the `<input>` HTML element as an attribute. This is how you can also 
 attach CSS classes or IDs to form fields.
+
+### Form Views
+
+The final step before you can see this form in the browser is to code a 
+new view function in the application that renders the template from the 
+previous part.
+
+So, let's write a new view function mapped to the */login* URL that 
+creates a form, and passes it to the template for rendering. This view 
+function can also go in the *app/routes.py* module with the previous 
+one:
+
+```python
+# app/routes.py: Login view function
+from flask import render_template
+from app import app
+from app.forms import LoginForm
+
+
+@app.route('/')
+@app.route('/index')
+def index():
+    user = {'username': 'José A.'}
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+    return render_template('index.html', 
+                           title = 'Home', 
+                           user = user, 
+                           posts = posts)
+
+@app.route('/login')
+def login():
+    form = LoginForm()
+    return render_template('login.html', title='Sign In', form=form)
+```
+
+What I did here is import the `LoginForm` class from *forms.py*, 
+instantiated an object from it, and sent it down to the template. 
+The `form=form` syntax may look odd, but is simply passing the `form` 
+object created in the line above (and shown on the right side) to the 
+template with the name `form` (shown on the left). This is all that is 
+required to get form fields rendered.
+
+To make it easy to access the login form, the base template can include 
+a link to it in the navigation bar:
+
+```html
+<html>
+    <head>
+        {% if title %}
+        <title>{{ title }} - Microblog</title>
+        {% else %}
+        <title>Welcome to Microblog!</title>
+        {% endif %}
+    </head>
+    <body>
+        <div>
+            Microblog: 
+            <a href="/index">Home</a>
+            <a href="/login">Login</a>
+        </div>
+        <hr>
+        {% block content %}{% endblock %}
+    </body>
+</html>
+```
+
+At this point, you can run the application and see the form in your web 
+browser. With the application running, type `http://localhost:5000/` in 
+the browser's address bar, and then click on the "Login" link in the top 
+navigation bar to see the new login form. Pretty cool, right?
+
+![img](02-web-forms-a.png)
