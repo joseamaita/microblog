@@ -321,3 +321,156 @@ the browser's address bar, and then click on the "Login" link in the top
 navigation bar to see the new login form. Pretty cool, right?
 
 ![img](02-web-forms-a.png)
+
+### Receiving Form Data
+
+If you try to press the submit button the browser is going to display a 
+"Method Not Allowed" error.
+
+![img](02-web-forms-b.png)
+
+This is because the login view function from the previous section does 
+one half of the job so far. It can display the form on a web page, but 
+it has no logic to process data submitted by the user yet. This is 
+another area where Flask-WTF makes the job really easy. Here is an 
+updated version of the view function that accepts and validates the 
+data submitted by the user:
+
+```python
+# app/routes.py: Receiving login credentials
+from flask import render_template, flash, redirect
+from app import app
+from app.forms import LoginForm
+
+
+@app.route('/')
+@app.route('/index')
+def index():
+    user = {'username': 'José A.'}
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+    return render_template('index.html', 
+                           title = 'Home', 
+                           user = user, 
+                           posts = posts)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    form = LoginForm()
+    if form.validate_on_submit():
+        flash(f'Login requested for user {form.username.data}, '\
+              f'remember_me = {form.remember_me.data}')
+        return redirect('/index')
+    return render_template('login.html', title='Sign In', form=form)
+```
+
+The first new thing in this version is the `methods` argument in the 
+route decorator. This tells Flask that this view function accepts `GET` 
+and `POST` requests, overriding the default, which is to accept 
+only `GET` requests. The HTTP protocol states that `GET` requests are 
+those that return information to the client (the web browser in this 
+case). All the requests in the application so far are of this 
+type. `POST` requests are typically used when the browser submits form 
+data to the server (in reality `GET` requests can also be used for this 
+purpose, but it is not a recommended practice). The "Method Not Allowed" 
+error that the browser showed you before, appears because the browser 
+tried to send a `POST` request and the application was not configured to 
+accept it. By providing the `methods` argument, you are telling Flask 
+which request methods should be accepted.
+
+The `form.validate_on_submit()` method does all the form processing 
+work. When the browser sends the `GET` request to receive the web page 
+with the form, this method is going to return `False`, so in that case 
+the function skips the `if` statement and goes directly to render the
+template in the last line of the function.
+
+When the browser sends the `POST` request as a result of the user 
+pressing the submit button, `form.validate_on_submit()` is going to 
+gather all the data, run all the validators attached to fields, and if 
+everything is all right it will return `True`, indicating that the data 
+is valid and can be processed by the application. But if at least one 
+field fails validation, then the function will return `False`, and that 
+will cause the form to be rendered back to the user, like in the `GET`
+request case. Later I'm going to add an error message when validation 
+fails.
+
+When `form.validate_on_submit()` returns `True`, the login view function 
+calls two new functions, imported from Flask. The `flash()` function is 
+a useful way to show a message to the user. A lot of applications use 
+this technique to let the user know if some action has been successful 
+or not. In this case, I'm going to use this mechanism as a temporary 
+solution, because I don't have all the infrastructure necessary to log 
+users in for real yet. The best I can do for now is show a message that 
+confirms that the application received the credentials.
+
+The second new function used in the login view function is `redirect()`. 
+This function instructs the client web browser to automatically navigate 
+to a different page, given as an argument. This view function uses it to 
+redirect the user to the index page of the application.
+
+When you call the `flash()` function, Flask stores the message, but 
+flashed messages will not magically appear in web pages. The templates 
+of the application need to render these flashed messages in a way that 
+works for the site layout. I'm going to add these messages to the base 
+template, so that all the templates inherit this functionality. This is 
+the updated base template:
+
+```html
+<html>
+    <head>
+        {% if title %}
+        <title>{{ title }} - Microblog</title>
+        {% else %}
+        <title>Welcome to Microblog!</title>
+        {% endif %}
+    </head>
+    <body>
+        <div>
+            Microblog: 
+            <a href="/index">Home</a>
+            <a href="/login">Login</a>
+        </div>
+        <hr>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <ul>
+            {% for message in messages %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </body>
+</html>
+```
+
+Here I'm using a `with` construct to assign the result of 
+calling `get_flashed_messages()` to a `messages` variable, all in the 
+context of the template. The `get_flashed_messages()` function comes 
+from Flask, and returns a list of all the messages that have been 
+registered with `flash()` previously. The conditional that follows 
+checks if `messages` has some content, and in that case, a `<ul>` 
+element is rendered with each message as a `<li>` list item. This style 
+of rendering does not look great, but the topic of styling the web 
+application will come later.
+
+An interesting property of these flashed messages is that once they are 
+requested once through the `get_flashed_messages` function they are 
+removed from the message list, so they appear only once after 
+the `flash()` function is called.
+
+This is a great time to try the application one more time and test how 
+the form works. Make sure you try submitting the form with the username 
+or password fields empty, to see how the `DataRequired` validator halts 
+the submission process.
+
+![img](02-web-forms-c.png)
