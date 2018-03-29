@@ -474,3 +474,63 @@ or password fields empty, to see how the `DataRequired` validator halts
 the submission process.
 
 ![img](02-web-forms-c.png)
+
+### Improving Field Validation
+
+The validators that are attached to form fields prevent invalid data 
+from being accepted into the application. The way the application deals 
+with invalid form input is by re-displaying the form, to let the user 
+make the necessary corrections.
+
+If you tried to submit invalid data, I'm sure you noticed that while the 
+validation mechanisms work well, there is no indication given to the 
+user that something is wrong with the form, the user simply gets the 
+form back. The next task is to improve the user experience by adding a 
+meaningful error message next to each field that failed validation.
+
+In fact, the form validators generate these descriptive error messages 
+already, so all that is missing is some additional logic in the template 
+to render them.
+
+Here is the login template with added field validation messages in the 
+username and password fields:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Sign In</h1>
+    <form action="" method="post" name="login">
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.username.label }}<br>
+            {{ form.username(size=32) }}
+            {% for error in form.username.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.password.label }}<br>
+            {{ form.password(size=32) }}
+            {% for error in form.password.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>{{ form.remember_me() }} {{ form.remember_me.label }}</p>
+        <p>{{ form.submit() }}</p>
+    </form>
+{% endblock %}
+```
+
+The only change I've made is to add for loops right after the username 
+and password fields that render the error messages added by the 
+validators in red color. As a general rule, any fields that have 
+validators attached will have error messages added 
+under `form.<field_name>.errors`. This is going to be a list, because 
+fields can have multiple validators attached and more than one may be 
+providing error messages to display to the user.
+
+If you try to submit the form with an empty username or password, you 
+will now get a nice error message in red.
+
+![img](02-web-forms-d.png)
