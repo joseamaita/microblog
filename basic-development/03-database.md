@@ -59,3 +59,27 @@ have activated it first, and the run:
 ```
 (venv) $ pip install flask-sqlalchemy
 ```
+
+### Database Migrations
+
+Most database tutorials I've seen cover creation and use of a database, 
+but do not adequately address the problem of making updates to an 
+existing database as the application needs change or grow. This is hard 
+because relational databases are centered around structured data, so 
+when the structure changes the data that is already in the database 
+needs to be *migrated* to the modified structure.
+
+The second extension that I'm going to present in this part 
+is [Flask-Migrate](https://github.com/miguelgrinberg/flask-migrate), 
+which is actually one created by yours truly. This extension is a Flask 
+wrapper for [Alembic](https://bitbucket.org/zzzeek/alembic), a database 
+migration framework for SQLAlchemy. Working with database migrations 
+adds a bit of work to get a database started, but that is a small price 
+to pay for a robust way to make changes to your database in the future.
+
+The installation process for Flask-Migrate is similar to other 
+extensions you have seen:
+
+```
+(venv) $ pip install flask-migrate
+```
