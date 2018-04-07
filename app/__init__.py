@@ -1,8 +1,12 @@
-# app/__init__.py: Flask configuration
+# app/__init__.py: Flask-SQLAlchemy and Flask-Migrate initialization
 from flask import Flask
 from config import Config
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 
 app = Flask(__name__)
 app.config.from_object(Config)
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
-from app import routes
+from app import routes, models

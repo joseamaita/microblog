@@ -83,3 +83,143 @@ extensions you have seen:
 ```
 (venv) $ pip install flask-migrate
 ```
+
+### Flask-SQLAlchemy Configuration
+
+During development, I'm going to use a SQLite database. SQLite databases 
+are the most convenient choice for developing small applications, 
+sometimes even not so small ones, as each database is stored in a single 
+file on disk and there is no need to run a database server like MySQL 
+and PostgreSQL.
+
+We have two new configuration items to add to the config file:
+
+```python
+# config.py: Flask-SQLAlchemy configuration
+import secrets
+import os
+basedir = os.path.abspath(os.path.dirname(__file__))
+
+class Config(object):
+    SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        'sqlite:///' + os.path.join(basedir, 'app.db')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+```
+
+The Flask-SQLAlchemy extension takes the location of the application's 
+database from the `SQLALCHEMY_DATABASE_URI` configuration variable. As 
+you recall from the previous section, it is, in general a good practice 
+to set configuration from environment variables, and provide a fallback 
+value when the environment does not define the variable. In this case 
+I'm taking the database URL from the `DATABASE_URL` environment 
+variable, and if that isn't defined, I'm configuring a database 
+named *app.db* located in the main directory of the application, which 
+is stored in the `basedir` variable.
+
+The `SQLALCHEMY_TRACK_MODIFICATIONS` configuration option is set 
+to `False` to disable a feature of Flask-SQLAlchemy that I do not need, 
+which is to signal the application every time a change is about to be 
+made in the database.
+
+The database is going to be represented in the application by 
+the *database instance*. The database migration engine will also have an 
+instance. These are objects that need to be created after the 
+application, in the *app/__init__.py* file:
+
+```python
+# app/__init__.py: Flask-SQLAlchemy and Flask-Migrate initialization
+from flask import Flask
+from config import Config
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+
+app = Flask(__name__)
+app.config.from_object(Config)
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+
+from app import routes, models
+```
+
+I have made three changes to the init script. First, I have added a `db` 
+object that represents the database. Then, I have added another object 
+that represents the migration engine. Hopefully you see a pattern in how 
+to work with Flask extensions. Most extensions are initialized as these 
+two. Finally, I'm importing a new module called `models` at the bottom. 
+This module will define the structure of the database.
+
+### Database Models
+
+The data that will be stored in the database will be represented by a 
+collection of classes, usually called *database models*. The ORM layer 
+within SQLAlchemy will do the translations required to map objects 
+created from these classes into rows in the proper database tables.
+
+Let's start by creating a model that represents users. The data is 
+represented like this:
+
+```
+users
+-----
+id                 INTEGER
+username           VARCHAR(64)
+email              VARCHAR(120)
+password_hash      VARCHAR(128)
+```
+
+The `id` field is usually in all models, and is used as 
+the *primary key*. Each user in the database will be assigned a unique 
+id value, stored in this field. Primary keys are, in most cases, 
+automatically assigned by the database, so I just need to provide 
+the `id` field marked as a primary key.
+
+The `username`, `email` and `password_hash` fields are defined as 
+strings (or `VARCHAR` in database jargon), and their maximum lengths are 
+specified so that the database can optimize space usage. While 
+the `username` and `email` fields are self-explanatory, 
+the `password_hash` field deserves some attention. I want to make sure 
+the application that I'm building adopts security best practices, and 
+for that reason I will not be storing user passwords in the database. 
+The problem with storing passwords is that if the database ever becomes 
+compromised, the attackers will have access to the passwords, and that 
+could be devastating for users. Instead of writing the passwords 
+directly, I'm going to write *password hashes*, which greatly improve 
+security. This is going to be the topic of another section, so don't 
+worry about it too much for now.
+
+So now that I know what I want for my users table, I can translate that 
+into code in the new *app/models.py* module:
+
+```python
+# app/models.py: User database model
+from app import db
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), index=True, unique=True)
+    email = db.Column(db.String(120), index=True, unique=True)
+    password_hash = db.Column(db.String(128))
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+```
+
+The `User` class created above inherits from `db.Model`, a base class 
+for all models from Flask-SQLAlchemy. This class defines several fields 
+as class variables. Fields are created as instances of the `db.Column` 
+class, which takes the field type as an argument, plus other optional 
+arguments that, for example, allow me to indicate which fields are 
+unique and indexed, which is important so that database searches are 
+efficient.
+
+The `__repr__` method tells Python how to print objects of this class, 
+which is going to be useful for debugging. You can see the `__repr__()` 
+method in action in the Python interpreter session below:
+
+```python
+>>> from app.models import User
+>>> u = User(username='mary', email='mary@mail.com')
+>>> u
+<User mary>
+```
