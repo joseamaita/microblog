@@ -223,3 +223,47 @@ method in action in the Python interpreter session below:
 >>> u
 <User mary>
 ```
+
+### Creating the Migration Repository
+
+The model class created above defines the initial database structure (or 
+schema) for this application. But as the application continues to grow, 
+there is going to be a need to change that structure, very likely to add 
+new things, but sometimes also to modify or remove items. Alembic (the 
+migration framework used by Flask-Migrate) will make these schema 
+changes in a way that does not require the database to be recreated from 
+scratch.
+
+To accomplish this seemingly difficult task, Alembic maintains 
+a *migration repository*, which is a directory in which it stores its 
+migration scripts. Each time a change is made to the database schema, a 
+migration script is added to the repository with the details of the 
+change. To apply the migrations to a database, these migration scripts 
+are executed in the sequence they were created.
+
+Flask-Migrate exposes its commands through the `flask` command. You have 
+already seen `flask run`, which is a sub-command that is native to 
+Flask. The `flask db` sub-command is added by Flask-Migrate to manage 
+everything related to database migrations. So let's create the migration 
+repository for microblog by running `flask db init`:
+
+```
+(venv) $ flask db init
+  Creating directory ~/microblog.git/migrations ... done
+  Creating directory ~/microblog.git/migrations/versions ... done
+  Generating ~/microblog.git/migrations/env.py ... done
+  Generating ~/microblog.git/migrations/README ... done
+  Generating ~/microblog.git/migrations/script.py.mako ... done
+  Generating ~/microblog.git/migrations/alembic.ini ... done
+  Please edit configuration/connection/logging settings in 
+  '~/microblog.git/migrations/alembic.ini' before proceeding.
+```
+
+Remember that the `flask` command relies on the `FLASK_APP` environment 
+variable to know where the Flask application lives. For this 
+application, you want to set `FLASK_APP=microblog.py`.
+
+After you run this command, you will find a new *migrations* directory, 
+with a few files and a *versions* sub-directory inside. All these files 
+should be treated as part of your project from now on, and in 
+particular, should be added to source control.
