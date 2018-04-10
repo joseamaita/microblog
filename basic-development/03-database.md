@@ -267,3 +267,69 @@ After you run this command, you will find a new *migrations* directory,
 with a few files and a *versions* sub-directory inside. All these files 
 should be treated as part of your project from now on, and in 
 particular, should be added to source control.
+
+### The First Database Migration
+
+With the migration repository in place, it is time to create the first 
+database migration, which will include the users table that maps to 
+the `User` database model. There are two ways to create a database 
+migration: manually or automatically. To generate a migration 
+automatically, Alembic compares the database schema as defined by the 
+database models, against the actual database schema currently used in 
+the database. It then populates the migration script with the changes 
+necessary to make the database schema match the application models. In 
+this case, since there is no previous database, the automatic migration 
+will add the entire `User` model to the migration script. 
+The `flask db migrate` sub-command generates these automatic migrations: 
+
+```
+(venv) $ flask db migrate -m "users table"
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.autogenerate.compare] Detected added table 'user'
+INFO  [alembic.autogenerate.compare] Detected added index 'ix_user_email' on '['email']'
+INFO  [alembic.autogenerate.compare] Detected added index 'ix_user_username' on '['username']'
+  Generating ~/microblog.git/migrations/versions/f15a034db877_users_table.py ... done
+```
+
+The output of the command gives you an idea of what Alembic included in 
+the migration. The first two lines are informational and can usually be 
+ignored. It then says that it found a user table and two indexes. Then 
+it tells you where it wrote the migration script. The `f15a034db877` 
+code is an automatically generated unique code for the migration (it 
+will be different for you). The comment given with the `-m` option is 
+optional, it adds a short descriptive text to the migration.
+
+The generated migration script is now part of your project, and needs to 
+be incorporated to source control. You are welcome to inspect the script 
+if you are curious to see how it looks. You will find that it has two 
+functions called `upgrade()` and `downgrade()`. The `upgrade()` function 
+applies the migration, and the `downgrade()` function removes it. This 
+allows Alembic to migrate the database to any point in the history, even 
+to older versions, by using the downgrade path.
+
+The `flask db migrate` command does not make any changes to the 
+database, it just generates the migration script. To apply the changes 
+to the database, the `flask db upgrade` command must be used.
+
+```
+(venv) $ flask db upgrade
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> f15a034db877, users table
+```
+
+Because this application uses SQLite, the `upgrade` command will detect 
+that a database does not exist and will create it (you will notice a 
+file named *app.db* is added after this command finishes, that is the 
+SQLite database). When working with database servers such as MySQL and 
+PostgreSQL, you have to create the database in the database server 
+before running `upgrade`.
+
+Note that Flask-SQLAlchemy uses a "snake case" naming conversion for 
+database tables by default. For the `User` model above, the 
+corresponding table in the database will be named `user`. For 
+a  `AddressAndPhone` model class, the table would be 
+named `address_and_phone`. If you prefer to choose your own table names, 
+you can add an attribute named `__tablename__` to the model class, set 
+to the desired name as a string.
