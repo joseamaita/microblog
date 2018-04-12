@@ -369,3 +369,133 @@ development. You may have generated a migration script and applied it,
 only to find that the changes that you made are not exactly what you 
 need. In this case, you can downgrade the database, delete the migration 
 script, and then generate a new one to replace it.
+
+### Database Relationships
+
+Relational databases are good at storing relations between data items. 
+Consider the case of a user writing a blog post. The user will have a 
+record in the `users` table, and the post will have a record in 
+the `posts` table. The most efficient way to record who wrote a given 
+post is to link the two related records.
+
+Once a link between a user and a post is established, the database can 
+answer queries about this link. The most trivial one is when you have a 
+blog post and need to know what user wrote it. A more complex query is 
+the reverse of this one. If you have a user, you may want to know all 
+the posts that this user wrote. Flask-SQLAlchemy will help with both 
+types of queries.
+
+Let's expand the database to store blog posts to see relationships in 
+action. Here is the schema for a new `posts` table:
+
+```
+users                                        posts
+-----                                        -----
+id                 INTEGER     -------       id             INTEGER
+username           VARCHAR(64)       |       body           VARCHAR(140)
+email              VARCHAR(120)      |       timestamp      DATETIME
+password_hash      VARCHAR(128)      ------- user_id        INTEGER
+```
+
+The `posts` table will have the required `id`, the `body` of the post 
+and a `timestamp`. But in addition to these expected fields, I'm adding 
+a `user_id` field, which links the post to its author. You've seen that 
+all users have a `id` primary key, which is unique. The way to link a 
+blog post to the user that authored it is to add a reference to the 
+user's `id`, and that is exactly what the `user_id` field is. 
+This `user_id` field is called a *foreign key*. The database diagram 
+above shows foreign keys as a link between the field and the `id` field 
+of the table it refers to. This kind of relationship is called 
+a *one-to-many*, because "one" user writes "many" posts.
+
+The modified *app/models.py* is shown below:
+
+```python
+# app/models.py: Posts database table and relationship
+from datetime import datetime
+from app import db
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), index=True, unique=True)
+    email = db.Column(db.String(120), index=True, unique=True)
+    password_hash = db.Column(db.String(128))
+    posts = db.relationship('Post', backref='author', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+class Post(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    body = db.Column(db.String(140))
+    timestamp = db.Column(db.DateTime, 
+                          index = True, 
+                          default = datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+    def __repr__(self):
+        return f'<Post {self.body}>'
+```
+
+The new `Post` class will represent blog posts written by users. 
+The `timestamp` field is going to be indexed, which is useful if you 
+want to retrieve posts in chronological order. I have also added 
+a `default` argument, and passed the `datetime.utcnow` function. When 
+you pass a function as a default, SQLAlchemy will set the field to the 
+value of calling that function (note that I did not include the `()` 
+after `utcnow`, so I'm passing the function itself, and not the result 
+of calling it). In general, you will want to work with UTC dates and 
+times in a server application. This ensures that you are using uniform 
+timestamps regardless of where the users are located. These timestamps 
+will be converted to the user's local time when they are displayed.
+
+The `user_id` field was initialized as a foreign key to `user.id`, which 
+means that it references an `id` value from the users table. In this 
+reference, the `user` part is the name of the database table for the 
+model. It is an unfortunate inconsistency that in some instances such as 
+in a `db.relationship()` call, the model is referenced by the model 
+class, which typically starts with an uppercase character, while in 
+other cases such as this `db.ForeignKey()` declaration, a model is given 
+by its database table name, for which SQLAlchemy automatically uses 
+lowercase characters and, for multi-word model names, snake case.
+
+The `User` class has a new `posts` field, that is initialized 
+with `db.relationship`. This is not an actual database field, but a 
+high-level view of the relationship between users and posts, and for 
+that reason it isn't in the database diagram. For a one-to-many 
+relationship, a `db.relationship` field is normally defined on the "one" 
+side, and is used as a convenient way to get access to the "many". So, 
+for example, if I have a user stored in `u`, the expression `u.posts` 
+will run a database query that returns all the posts written by that 
+user. The first argument to `db.relationship` is the model class that 
+represents the "many" side of the relationship. This argument can be 
+provided as a string with the class name if the model is defined later 
+in the module. The `backref` argument defines the name of a field that 
+will be added to the objects of the "many" class that points back at the 
+"one" object. This will add a `post.author` expression that will return 
+the user given a post. The `lazy` argument defines how the database 
+query for the relationship will be issued.
+
+Since I have updates to the application models, a new database migration 
+needs to be generated:
+
+```
+(venv) $ flask db migrate -m "posts table"
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.autogenerate.compare] Detected added table 'post'
+INFO  [alembic.autogenerate.compare] Detected added index 'ix_post_timestamp' on '['timestamp']'
+  Generating ~/microblog.git/migrations/versions/41cf27f62f9a_posts_table.py ... done
+```
+
+And the migration needs to be applied to the database:
+
+```
+(venv) $ flask db upgrade
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade f15a034db877 -> 41cf27f62f9a, posts table
+```
+
+If you are storing your project in source control, also remember to add 
+the new migration script to it.
