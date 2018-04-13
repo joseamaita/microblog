@@ -499,3 +499,153 @@ INFO  [alembic.runtime.migration] Running upgrade f15a034db877 -> 41cf27f62f9a, 
 
 If you are storing your project in source control, also remember to add 
 the new migration script to it.
+
+### Play Time
+
+I have made you suffer through a long process to define the database, 
+but I haven't shown you how everything works yet. Since the application 
+does not have any database logic yet, let's play with the database in 
+the Python interpreter to familiarize with it. So go ahead and fire up 
+Python by running `python`. Make sure your virtual environment is 
+activated before you start the interpreter.
+
+Once in the Python prompt, let's import the database instance and the 
+models:
+
+```python
+>>> from app import db
+>>> from app.models import User, Post
+```
+
+Start by creating a new user:
+
+```python
+>>> u = User(username='mary', email='mary@mail.com')
+>>> db.session.add(u)
+>>> db.session.commit()
+```
+
+Changes to a database are done in the context of a session, which can be 
+accessed as `db.session`. Multiple changes can be accumulated in a 
+session and once all the changes have been registered you can issue a 
+single `db.session.commit()`, which writes all the changes atomically. 
+If at any time while working on a session there is an error, a call 
+to `db.session.rollback()` will abort the session and remove any changes 
+stored in it. The important thing to remember is that changes are only 
+written to the database when `db.session.commit()` is called. Sessions 
+guarantee that the database will never be left in an inconsistent state.
+
+Let's add another user:
+
+```python
+>>> u = User(username='lucy', email='lucy@mail.com')
+>>> db.session.add(u)
+>>> db.session.commit()
+```
+
+The database can answer a query that returns all the users:
+
+```python
+>>> users = User.query.all()
+>>> users
+[<User mary>, <User lucy>]
+>>> for u in users:
+...     print(u.id, u.username)
+...
+1 mary
+2 lucy
+```
+
+All models have a `query` attribute that is the entry point to run 
+database queries. The most basic query is that one that returns all 
+elements of that class, which is appropriately named `all()`. Note that 
+the `id` fields were automatically set to 1 and 2 when those users were 
+added.
+
+Here is another way to do queries. If you know the `id` of a user, you 
+can retrieve that user as follows:
+
+```python
+>>> u = User.query.get(1)
+>>> u
+<User mary>
+>>> u = User.query.get(2)
+>>> u
+<User lucy>
+```
+
+Now let's add a blog post:
+
+```python
+>>> u = User.query.get(1)
+>>> p = Post(body='This is my first post with Microblog!', author=u)
+>>> db.session.add(p)
+>>> db.session.commit()
+```
+
+I did not need to set a value for the `timestamp` field because that 
+field has a default, which you can see in the model definition. And what 
+about the `user_id` field? Recall that the `db.relationship` that I 
+created in the `User` class adds a `posts` attribute to users, and also 
+an `author` attribute to posts. I assign an author to a post using 
+the `author` virtual field instead of having to deal with user IDs. 
+SQLAlchemy is great in that respect, as it provides a high-level 
+abstraction over relationships and foreign keys.
+
+To complete this session, let's look at a few more database queries:
+
+```python
+>>> # get all posts written by a user
+>>> u = User.query.get(1)
+>>> u
+<User mary>
+>>> posts = u.posts.all()
+>>> posts
+[<Post This is my first post with Microblog!>]
+
+>>> # same, but with a user that has no posts
+>>> u = User.query.get(2)
+>>> u
+<User lucy>
+>>> u.posts.all()
+[]
+
+>>> # print post author and body for all posts 
+>>> posts = Post.query.all()
+>>> for p in posts:
+...     print(p.id, p.author.username, p.body)
+...
+1 mary This is my first post with Microblog!
+
+# get all users in alphabetical order
+>>> User.query.order_by(User.username.asc()).all()
+[<User lucy>, <User mary>]
+```
+
+The [Flask-SQLAlchemy](http://flask-sqlalchemy.pocoo.org/2.3/) 
+documentation is the best place to learn about the many options that are 
+available to query the database.
+
+To complete this section, let's erase the test users and posts created 
+above, so that the database is clean and ready for future 
+experimentation:
+
+```python
+>>> users = User.query.all()
+>>> users
+[<User mary>, <User lucy>]
+>>> for u in users:
+...     db.session.delete(u)
+...
+>>> posts = Post.query.all()
+>>> posts
+[<Post This is my first post with Microblog!>]
+>>> for p in posts:
+...     db.session.delete(p)
+...
+>>> db.session.commit()
+>>> User.query.all()
+[]
+>>> Post.query.all()
+[]
+```
