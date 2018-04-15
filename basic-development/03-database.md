@@ -649,3 +649,68 @@ experimentation:
 >>> Post.query.all()
 []
 ```
+
+### Shell Context
+
+While you work on your application, you will need to test things out in 
+a Python shell very often, so having to repeat `imports` statements 
+every time is going to get tedious. The `flask shell` command is another 
+very useful tool in the `flask` umbrella of commands. The `shell` 
+command is the second "core" command implemented by Flask, after `run`. 
+The purpose of this command is to start a Python interpreter in the 
+context of the application. What does that mean? See the following 
+example:
+
+```
+(venv) $ python
+>>> app
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+NameError: name 'app' is not defined
+>>>
+
+(venv) $ flask shell
+App: app
+Instance: ~/microblog.git/instance
+>>> app
+<Flask 'app'>
+```
+
+With a regular interpreter session, the `app` symbol is not known unless 
+it is explicitly imported, but when using `flask shell`, the command 
+pre-imports the application instance. The nice thing about `flask shell` 
+is not that it pre-imports `app`, but that you can configure a "shell 
+context", which is a list of other symbols to pre-import.
+
+The following function in *microblog.py* creates a shell context that 
+adds the database instance and models to the shell session:
+
+```python
+# microblog.py: Main application module
+from app import app, db
+from app.models import User, Post
+
+@app.shell_context_processor
+def make_shell_context():
+    return {'db': db, 'User': User, 'Post': Post}
+```
+
+The `app.shell_context_processor` decorator registers the function as a 
+shell context function. When the `flask shell` command runs, it will 
+invoke this function and register the items returned by it in the shell 
+session. The reason the function returns a dictionary and not a list is 
+that for each item you have to also provide a name under which it will 
+be referenced in the shell, which is given by the dictionary keys.
+
+After you add the shell context processor function you can work with 
+database entities without having to import them:
+
+```
+(venv) $ flask shell
+>>> db
+<SQLAlchemy engine=sqlite:////~/microblog.git/app.db>
+>>> User
+<class 'app.models.User'>
+>>> Post
+<class 'app.models.Post'>
+```
