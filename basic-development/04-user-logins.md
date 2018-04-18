@@ -107,3 +107,40 @@ False
 >>> u.check_password('mypassword')
 True
 ```
+
+### Introduction to Flask-Login
+
+Now, I'm going to introduce you to a very popular Flask extension 
+called [Flask-Login](https://flask-login.readthedocs.io/en/latest/). 
+This extension manages the user logged-in state, so that for example 
+users can log in to the application and then navigate to different pages 
+while the application "remembers" that the user is logged in. It also 
+provides the "remember me" functionality that allows users to remain 
+logged in even after closing the browser window. To be ready for this 
+section, you can start by installing Flask-Login in your virtual 
+environment:
+
+```
+(venv) $ pip install flask-login
+```
+
+As with other extensions, Flask-Login needs to be created and 
+initialized right after the application instance in *app/__init__.py*. 
+Let's see how this extension is initialized:
+
+```python
+# app/__init__.py: Flask-Login initialization
+from flask import Flask
+from config import Config
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_login import LoginManager
+
+app = Flask(__name__)
+app.config.from_object(Config)
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+login_manager = LoginManager(app)
+
+from app import routes, models
+```
