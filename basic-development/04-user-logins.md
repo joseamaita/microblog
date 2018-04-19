@@ -144,3 +144,63 @@ login_manager = LoginManager(app)
 
 from app import routes, models
 ```
+
+### Preparing The User Model for Flask-Login
+
+The Flask-Login extension works with the application's user model, and 
+expects certain properties and methods to be implemented in it. This 
+approach is nice, because as long as these required items are added to 
+the model, Flask-Login does not have any other requirements, so for 
+example, it can work with user models that are based on any database 
+system.
+
+The four required items are listed below:
+
+* `is_authenticated`: a property that is `True` if the user has valid 
+credentials or `False` otherwise.
+* `is_active`: a property that is `True` if the user's account is active 
+or `False` otherwise.
+* `is_anonymous`: a property that is `False` for regular users, 
+and `True` for a special, anonymous user.
+* `get_id()`: a method that returns a unique identifier for the user as 
+a string (unicode, if using Python 2).
+
+I can implement these four easily, but since the implementations are 
+fairly generic, Flask-Login provides a *mixin* class called `UserMixin` 
+that includes generic implementations that are appropriate for most user 
+model classes. Here is how the mixin class is added to the model:
+
+```python
+# app/models.py: Flask-Login user mixin class
+from datetime import datetime
+from app import db
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import UserMixin
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), index=True, unique=True)
+    email = db.Column(db.String(120), index=True, unique=True)
+    password_hash = db.Column(db.String(128))
+    posts = db.relationship('Post', backref='author', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+class Post(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    body = db.Column(db.String(140))
+    timestamp = db.Column(db.DateTime, 
+                          index = True, 
+                          default = datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+    def __repr__(self):
+        return f'<Post {self.body}>'
+```
