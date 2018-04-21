@@ -263,3 +263,99 @@ the `@login_manager.user_loader` decorator. The `id` that Flask-Login
 passes to the function as an argument is going to be a string, so 
 databases that use numeric IDs need to convert the string to integer as 
 you see above.
+
+### Logging Users In
+
+Let's revisit the login view function, which as you recall, implemented 
+a fake login that just issued a `flash()` message. Now that the 
+application has access to a user database and knows how to generate and 
+verify password hashes, this view function can be completed. Let's see:
+
+```python
+# app/routes.py: Login view function logic
+from flask import render_template, flash, redirect, url_for
+from app import app
+from app.forms import LoginForm
+from flask_login import current_user, login_user
+from app.models import User
+
+
+@app.route('/')
+@app.route('/index')
+def index():
+    user = {'username': 'José A.'}
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+    return render_template('index.html', 
+                           title = 'Home', 
+                           user = user, 
+                           posts = posts)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid username or password')
+            return redirect(url_for('login'))
+        login_user(user, remember=form.remember_me.data)
+        return redirect(url_for('index'))
+    return render_template('login.html', title='Sign In', form=form)
+```
+
+The top two lines in the `login()` function deal with a weird situation. 
+Imagine you have a user that is logged in, and the user navigates to 
+the */login* URL of your application. Clearly, that is a mistake, so I 
+want to not allow that. The `current_user` variable comes from 
+Flask-Login and can be used at any time during the handling to obtain 
+the user object that represents the client of the request. The value of 
+this variable can be a user object from the database (which Flask-Login 
+reads through the user loader callback I provided above), or a special 
+anonymous user object if the user did not log in yet. Remember those 
+properties that Flask-Login required in the user object? One of those 
+was `is_authenticated`, which comes in handy to check if the user is 
+logged in or not. When the user is already logged in, I just redirect to 
+the index page.
+
+In place of the `flash()` call that I used earlier, now I can log the 
+user in for real. The first step is to load the user from the database. 
+The username came with the form submission, so I can query the database 
+with that to find the user. For this purpose, I'm using 
+the `filter_by()` method of the SQLAlchemy query object. The result 
+of `filter_by()` is a query that only includes the objects that have a 
+matching username. Since I know there is only going to be one or zero 
+results, I complete the query by calling `first()`, which will return 
+the user object if it exists, or `None` if it does not. Previously, you 
+have seen that when you call the `all()` method in a query, the query 
+executes and you get a list of all the results that match that query. 
+The `first()` method is another commonly used way to execute a query, 
+when you only need to have one result.
+
+If I got a match for the username that was provided, I can next check if 
+the password that also came with the form is valid. This is done by 
+invoking the `check_password()` method I defined above. This will take 
+the password hash stored with the user and determine if the password 
+entered in the form matches the hash or not. So now I have two possible 
+error conditions: the username can be invalid, or the password can be 
+incorrect for the user. In either of those cases, I flash a message, and 
+redirect back to the login prompt so that the user can try again.
+
+If the username and password are both correct, then I call 
+the `login_user()` function, which comes from Flask-Login. This function 
+will register the user as logged in, so that means that any future pages 
+the user navigates to will have the `current_user` variable set to that 
+user.
+
+To complete the login process, I just redirect the newly logged-in user 
+to the index page.
