@@ -1,8 +1,8 @@
-# app/routes.py: Login view function logic
+# app/routes.py: Logout view function
 from flask import render_template, flash, redirect, url_for
 from app import app
 from app.forms import LoginForm
-from flask_login import current_user, login_user
+from flask_login import current_user, login_user, logout_user
 from app.models import User
 
 
@@ -38,3 +38,8 @@ def login():
         login_user(user, remember=form.remember_me.data)
         return redirect(url_for('index'))
     return render_template('login.html', title='Sign In', form=form)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('index'))

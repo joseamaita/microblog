@@ -359,3 +359,100 @@ user.
 
 To complete the login process, I just redirect the newly logged-in user 
 to the index page.
+
+### Logging Users Out
+
+I know I will also need to offer users the option to log out of the 
+application. This can be done with Flask-Login's `logout_user()` 
+function. Let's see the logout view function in *app/routes.py*:
+
+```python
+# app/routes.py: Logout view function
+from flask import render_template, flash, redirect, url_for
+from app import app
+from app.forms import LoginForm
+from flask_login import current_user, login_user, logout_user
+from app.models import User
+
+
+@app.route('/')
+@app.route('/index')
+def index():
+    user = {'username': 'José A.'}
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+    return render_template('index.html', 
+                           title = 'Home', 
+                           user = user, 
+                           posts = posts)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid username or password')
+            return redirect(url_for('login'))
+        login_user(user, remember=form.remember_me.data)
+        return redirect(url_for('index'))
+    return render_template('login.html', title='Sign In', form=form)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+```
+
+To expose this link to users, I can make the Login link in the 
+navigation bar automatically switch to a Logout link after the user logs 
+in. This can be done with a conditional in the *base.html* template:
+
+```html
+<html>
+    <head>
+        {% if title %}
+        <title>{{ title }} - Microblog</title>
+        {% else %}
+        <title>Welcome to Microblog!</title>
+        {% endif %}
+    </head>
+    <body>
+        <div>
+            Microblog: 
+            <a href="{{ url_for('index') }}">Home</a>
+            {% if current_user.is_anonymous %}
+            <a href="{{ url_for('login') }}">Login</a>
+            {% else %}
+            <a href="{{ url_for('logout') }}">Logout</a>
+            {% endif %}
+        </div>
+        <hr>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <ul>
+            {% for message in messages %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </body>
+</html>
+```
+
+The `is_anonymous` property is one of the attributes that Flask-Login 
+adds to user objects through the `UserMixin` class. 
+The `current_user.is_anonymous` expression is going to be `True` only 
+when the user is not logged in.
