@@ -456,3 +456,94 @@ The `is_anonymous` property is one of the attributes that Flask-Login
 adds to user objects through the `UserMixin` class. 
 The `current_user.is_anonymous` expression is going to be `True` only 
 when the user is not logged in.
+
+### Requiring Users To Login
+
+Flask-Login provides a very useful feature that forces users to log in 
+before they can view certain pages of the application. If a user who is 
+not logged in tries to view a protected page, Flask-Login will 
+automatically redirect the user to the login form, and only redirect 
+back to the page the user wanted to view after the login process is 
+complete.
+
+For this feature to be implemented, Flask-Login needs to know what is 
+the view function that handles logins. This can be added 
+in *app/__init__.py*:
+
+```python
+# app/__init__.py: Flask-Login view function that handles logins
+from flask import Flask
+from config import Config
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_login import LoginManager
+
+app = Flask(__name__)
+app.config.from_object(Config)
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
+from app import routes, models
+```
+
+The `'login'` value above is the function (or endpoint) name for the 
+login view. In other words, the name you would use in a `url_for()` call 
+to get the URL.
+
+The way Flask-Login protects a view function against anonymous users is 
+with a decorator called `@login_required`. When you add this decorator 
+to a view function below the `@app.route` decorators from Flask, the 
+function becomes protected and will not allow access to users that are 
+not authenticated. Here is how the decorator can be applied to the index 
+view function of the application:
+
+```python
+# app/routes.py: @login_required decorator
+from flask import render_template, flash, redirect, url_for
+from app import app
+from app.forms import LoginForm
+from flask_login import current_user, login_user, logout_user, login_required
+from app.models import User
+
+
+@app.route('/')
+@app.route('/index')
+@login_required
+def index():
+    user = {'username': 'José A.'}
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+    return render_template('index.html', 
+                           title = 'Home', 
+                           user = user, 
+                           posts = posts)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid username or password')
+            return redirect(url_for('login'))
+        login_user(user, remember=form.remember_me.data)
+        return redirect(url_for('index'))
+    return render_template('login.html', title='Sign In', form=form)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+```

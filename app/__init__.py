@@ -1,4 +1,4 @@
-# app/__init__.py: Flask-Login initialization
+# app/__init__.py: Flask-Login view function that handles logins
 from flask import Flask
 from config import Config
 from flask_sqlalchemy import SQLAlchemy
@@ -10,5 +10,6 @@ app.config.from_object(Config)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager(app)
+login_manager.login_view = 'login'
 
 from app import routes, models
