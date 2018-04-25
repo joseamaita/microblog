@@ -547,3 +547,99 @@ def logout():
     logout_user()
     return redirect(url_for('index'))
 ```
+
+### Redirecting Back From The Successful Login
+
+What remains is to implement the redirect back from the successful login 
+to the page the user wanted to access. When a user that is not logged in 
+accesses a view function protected with the `@login_required` decorator, 
+the decorator is going to redirect to the login page, but it is going to 
+include some extra information in this redirect so that the application 
+can then return to the first page. If the user navigates to */index*, 
+for example, the `@login_required` decorator will intercept the request 
+and respond with a redirect to */login*, but it will add a query string 
+argument to this URL, making the complete redirect 
+URL */login?next=/index*. The `next` query string argument is set to the 
+original URL, so the application can use that to redirect back after 
+login.
+
+Here is shown how to read and process the `next` query string argument:
+
+```python
+# app/routes.py: Redirect to "next" page
+from flask import render_template, flash, redirect, url_for, request
+from app import app
+from app.forms import LoginForm
+from flask_login import current_user, login_user, logout_user, login_required
+from app.models import User
+from werkzeug.urls import url_parse
+
+
+@app.route('/')
+@app.route('/index')
+@login_required
+def index():
+    user = {'username': 'José A.'}
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+    return render_template('index.html', 
+                           title = 'Home', 
+                           user = user, 
+                           posts = posts)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid username or password')
+            return redirect(url_for('login'))
+        login_user(user, remember=form.remember_me.data)
+        next_page = request.args.get('next')
+        if not next_page or url_parse(next_page).netloc != '':
+            next_page = url_for('index')
+        return redirect(next_page)
+    return render_template('login.html', title='Sign In', form=form)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+```
+
+Right after the user is logged in by calling 
+Flask-Login's `login_user()` function, the value of the `next` query 
+string argument is obtained. Flask provides a `request` variable that 
+contains all the information that the client sent with the request. In 
+particular, the `request.args` attribute exposes the contents of the 
+query string in a friendly dictionary format. There are actually three 
+possible cases that need to be considered to determine where to redirect 
+after a successful login:
+
+* If the login URL does not have a `next` argument, then the user is 
+redirected to the index page.
+* If the login URL includes a `next` argument that is set to a relative 
+path (or in other words, a URL without the domain portion), then the 
+user is redirected to that URL.
+* If the login URL includes a `next` argument that is set to a full URL 
+that includes a domain name, then the user is redirected to the index 
+page.
+
+The first and second cases are self-explanatory. The third case is in 
+place to make the application more secure. An attacker could insert a 
+URL to a malicious site in the `next` argument, so the application only 
+redirects when the URL is relative, which ensures that the redirect 
+stays within the same site as the application. To determine if the URL 
+is relative or absolute, I parse it with Werkzeug's `url_parse()` 
+function and then check if the `netloc` component is set or not.
