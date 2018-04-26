@@ -643,3 +643,101 @@ redirects when the URL is relative, which ensures that the redirect
 stays within the same site as the application. To determine if the URL 
 is relative or absolute, I parse it with Werkzeug's `url_parse()` 
 function and then check if the `netloc` component is set or not.
+
+### Showing The Logged In User in Templates
+
+Do you recall way back when I created a fake user to help me design the 
+home page of the application before the user subsystem was in place? 
+Well, the application has real users now, so I can now remove the fake 
+user and start working with real users. Instead of the fake user I can 
+use Flask-Login's `current_user` in file *app/templates/index.html*:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Hi, {{ current_user.username }}!</h1>
+    {% for post in posts %}
+    <div>
+        <p>{{ post.author.username }} says: <b>{{ post.body }}</b></p>
+    </div>
+    {% endfor %}
+{% endblock %}
+```
+
+And I can remove the `user` template argument in the view function:
+
+```python
+# app/routes.py: Do not pass user to template anymore
+from flask import render_template, flash, redirect, url_for, request
+from app import app
+from app.forms import LoginForm
+from flask_login import current_user, login_user, logout_user, login_required
+from app.models import User
+from werkzeug.urls import url_parse
+
+
+@app.route('/')
+@app.route('/index')
+@login_required
+def index():
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+    return render_template('index.html', 
+                           title = 'Home', 
+                           posts = posts)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid username or password')
+            return redirect(url_for('login'))
+        login_user(user, remember=form.remember_me.data)
+        next_page = request.args.get('next')
+        if not next_page or url_parse(next_page).netloc != '':
+            next_page = url_for('index')
+        return redirect(next_page)
+    return render_template('login.html', title='Sign In', form=form)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+```
+
+This is a good time to test how the login and logout functionality 
+works. Since there is still no user registration, the only way to add a 
+user to the database is to do it via the Python shell, so 
+run `flask shell` and enter the following commands to register a user:
+
+```python
+>>> u = User(username='mary', email='mary@mail.com')
+>>> u.set_password('sunshine')
+>>> db.session.add(u)
+>>> db.session.commit()
+```
+
+If you start the application and try to access *http://localhost:5000/* 
+or *http://localhost:5000/index*, you will be immediately redirected to 
+the login page, and after you log in using the credentials of the user 
+that you added to your database, you will be returned to the original 
+page, in which you will see a personalized greeting.
+
+![img](04-user-logins-a.png)
+
+![img](04-user-logins-b.png)
+
+![img](04-user-logins-c.png)

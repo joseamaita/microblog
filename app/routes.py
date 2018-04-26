@@ -1,4 +1,4 @@
-# app/routes.py: Redirect to "next" page
+# app/routes.py: Do not pass user to template anymore
 from flask import render_template, flash, redirect, url_for, request
 from app import app
 from app.forms import LoginForm
@@ -11,7 +11,6 @@ from werkzeug.urls import url_parse
 @app.route('/index')
 @login_required
 def index():
-    user = {'username': 'José A.'}
     posts = [
         {
             'author': {'username': 'John'},
@@ -24,7 +23,6 @@ def index():
     ]
     return render_template('index.html', 
                            title = 'Home', 
-                           user = user, 
                            posts = posts)
 
 @app.route('/login', methods=['GET', 'POST'])
