@@ -741,3 +741,237 @@ page, in which you will see a personalized greeting.
 ![img](04-user-logins-b.png)
 
 ![img](04-user-logins-c.png)
+
+### User Registration
+
+The last piece of functionality that I'm going to build in this section 
+is a registration form, so that users can register themselves through a 
+web form. Let's begin by creating the web form class in *app/forms.py*:
+
+```python
+# app/forms.py: User registration form
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, BooleanField, SubmitField
+from wtforms.validators import ValidationError, DataRequired, Email, EqualTo
+from app.models import User
+
+class LoginForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    remember_me = BooleanField('Remember Me')
+    submit = SubmitField('Sign In')
+
+class RegistrationForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired()])
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    password2 = PasswordField(
+        'Repeat Password', validators=[DataRequired(), EqualTo('password')])
+    submit = SubmitField('Register')
+
+    def validate_username(self, username):
+        user = User.query.filter_by(username=username.data).first()
+        if user is not None:
+            raise ValidationError('Please use a different username.')
+
+    def validate_email(self, email):
+        user = User.query.filter_by(email=email.data).first()
+        if user is not None:
+            raise ValidationError('Please use a different email address.')
+```
+
+There are a couple of interesting things in this new form related to 
+validation. First, for the `email` field I've added a second validator 
+after `DataRequired`, called `Email`. This is another stock validator 
+that comes with WTForms that will ensure that what the user types in 
+this field matches the structure of an email address.
+
+Since this is a registration form, it is customary to ask the user to 
+type the password two times to reduce the risk of a typo. For that 
+reason I have `password` and `password2` fields. The second password 
+field uses yet another stock validator called `EqualTo`, which will make 
+sure that its value is identical to the one for the first password 
+field.
+
+I have also added two methods to this class called `validate_username()` 
+and `validate_email()`. When you add any methods that match the 
+pattern `validate_<field_name>`, WTForms takes those as custom 
+validators and invokes them in addition to the stock validators. In this 
+case I want to make sure that the username and email address entered by 
+the user are not already in the database, so these two methods issue 
+database queries expecting there will be no results. In the event a 
+result exists, a validation error is triggered by 
+raising `ValidationError`. The message included as the argument in the 
+exception will be the message that will be displayed next to the field 
+for the user to see.
+
+To display this form on a web page, I need to have an HTML template, 
+which I'm going to store in file *app/templates/register.html*. This 
+template is constructed similarly to the one for the login form:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Register</h1>
+    <form action="" method="post">
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.username.label }}<br>
+            {{ form.username(size=32) }}<br>
+            {% for error in form.username.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.email.label }}<br>
+            {{ form.email(size=64) }}<br>
+            {% for error in form.email.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.password.label }}<br>
+            {{ form.password(size=32) }}<br>
+            {% for error in form.password.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.password2.label }}<br>
+            {{ form.password2(size=32) }}<br>
+            {% for error in form.password2.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>{{ form.submit() }}</p>
+    </form>
+{% endblock %}
+```
+
+The login form template needs a link that sends new users to the 
+registration form, right below the form:
+
+```python
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Sign In</h1>
+    <form action="" method="post" name="login">
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.username.label }}<br>
+            {{ form.username(size=32) }}
+            {% for error in form.username.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.password.label }}<br>
+            {{ form.password(size=32) }}
+            {% for error in form.password.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>{{ form.remember_me() }} {{ form.remember_me.label }}</p>
+        <p>{{ form.submit() }}</p>
+    </form>
+    <p>New User? <a href="{{ url_for('register') }}">Click to Register!</a></p>
+{% endblock %}
+```
+
+And finally, I need to write the view function that is going to handle 
+user registrations in *app/routes.py*:
+
+```python
+# app/routes.py: User registration view function
+from flask import render_template, flash, redirect, url_for, request
+from app import app, db
+from app.forms import LoginForm, RegistrationForm
+from flask_login import current_user, login_user, logout_user, login_required
+from app.models import User
+from werkzeug.urls import url_parse
+
+
+@app.route('/')
+@app.route('/index')
+@login_required
+def index():
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+    return render_template('index.html', 
+                           title = 'Home', 
+                           posts = posts)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid username or password')
+            return redirect(url_for('login'))
+        login_user(user, remember=form.remember_me.data)
+        next_page = request.args.get('next')
+        if not next_page or url_parse(next_page).netloc != '':
+            next_page = url_for('index')
+        return redirect(next_page)
+    return render_template('login.html', title='Sign In', form=form)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        user = User(username=form.username.data, email=form.email.data)
+        user.set_password(form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        flash('Congratulations, you are now a registered user!')
+        return redirect(url_for('login'))
+    return render_template('register.html', title='Register', form=form)
+```
+
+And this view function should also be mostly self-explanatory. I first 
+make sure the user that invokes this route is not logged in. The form is 
+handled in the same way as the one for logging in. The logic that is 
+done inside the `if form.validate_on_submit()` conditional creates a new 
+user with the username, email and password provided, writes it to the 
+database, and then redirects to the login prompt so that the user can 
+log in.
+
+![img](04-user-logins-d.png)
+
+![img](04-user-logins-e.png)
+
+With these changes, users should be able to create accounts on this 
+application, and log in and out. Make sure you try all the validation 
+features I've added in the registration form to better understand how 
+they work. I am going to revisit the user authentication subsystem later 
+to add additional functionality such as to allow the user to reset the 
+password if forgotten. But for now, this is enough to continue building 
+other areas of the application.
+
+![img](04-user-logins-f.png)
+
+![img](04-user-logins-g.png)
+
+![img](04-user-logins-h.png)
+
+![img](04-user-logins-i.png)
