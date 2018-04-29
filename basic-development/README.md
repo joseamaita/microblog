@@ -4,3 +4,4 @@
 * Web Forms
 * Database
 * User Logins
+* Profile Page and Avatars
