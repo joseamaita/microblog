@@ -198,3 +198,146 @@ your application, you can view the corresponding user profile by
 typing *http://localhost:5000/user/lucy* in the address bar.
 
 ![img](05-profile-page-and-avatars-c.png)
+
+### Avatars
+
+I'm sure you agree that the profile pages that I just built are pretty 
+boring. To make them a bit more interesting, I'm going to add user 
+avatars, but instead of having to deal with a possibly large collection 
+of uploaded images in the server, I'm going to use 
+the [Gravatar](https://en.gravatar.com/) service to provide images for 
+all users.
+
+The Gravatar service is very simple to use. To request an image for a 
+given user, a URL with the 
+format *https://www.gravatar.com/avatar/<hash>*, where `<hash>` is the 
+MD5 hash of the user's email address. Below you can see how to obtain 
+the Gravatar URL for a user with email `mary@mail.com`:
+
+```python
+>>> from hashlib import md5
+>>> 'https://www.gravatar.com/avatar/' + md5(b'mary@mail.com').hexdigest()
+'https://www.gravatar.com/avatar/f393bea66bb04194c81b875b2f308159'
+```
+
+If you want to see an actual example, my own Gravatar URL 
+is *https://www.gravatar.com/avatar/51f5b72a36f48609b3048b6a5f2de2bc*. 
+Here is what Gravatar returns for this URL:
+
+![img](https://www.gravatar.com/avatar/51f5b72a36f48609b3048b6a5f2de2bc)
+
+By default the image size returned is 80x80 pixels, but a different size 
+can be requested by adding a `s` argument to the URL's query string. For 
+example, to obtain my own avatar as a 128x128 pixel image, the URL 
+is *https://www.gravatar.com/avatar/51f5b72a36f48609b3048b6a5f2de2bc?s=128*. 
+Here is what Gravatar returns for this URL:
+
+![img](https://www.gravatar.com/avatar/51f5b72a36f48609b3048b6a5f2de2bc?s=128)
+
+Another interesting argument that can be passed to Gravatar as a query 
+string argument is `d`, which determines what image Gravatar provides 
+for users that do not have an avatar registered with the service. My 
+favorite is called "identicon", which returns a nice geometric design 
+that is different for every email. For example:
+
+![img](https://www.gravatar.com/avatar/f393bea66bb04194c81b875b2f308159)
+
+Note that some web browser extensions such as Ghostery block Gravatar 
+images, as they consider that Automattic (the owners of the Gravatar 
+service) can determine what sites you visit based on the requests they 
+get for your avatar. If you don't see avatars in your browser, consider 
+that the problem may be due to an extension that you have installed in 
+your browser.
+
+Since avatars are associated with users, it makes sense to add the logic 
+that generates the avatar URLs to the user model. Let's see:
+
+```python
+# app/models.py: User avatar URLs
+from datetime import datetime
+from app import db, login_manager
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import UserMixin
+from hashlib import md5
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), index=True, unique=True)
+    email = db.Column(db.String(120), index=True, unique=True)
+    password_hash = db.Column(db.String(128))
+    posts = db.relationship('Post', backref='author', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def avatar(self, size):
+        digest = md5(self.email.lower().encode('utf-8')).hexdigest()
+        return f'https://www.gravatar.com/avatar/{digest}?d=identicon&s={size}'
+
+class Post(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    body = db.Column(db.String(140))
+    timestamp = db.Column(db.DateTime, 
+                          index = True, 
+                          default = datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+    def __repr__(self):
+        return f'<Post {self.body}>'
+
+@login_manager.user_loader
+def load_user(id):
+    return User.query.get(int(id))
+```
+
+The new `avatar()` method of the `User` class returns the URL of the 
+user's avatar image, scaled to the requested size in pixels. For users 
+that don't have an avatar registered, an "identicon" image will be 
+generated. To generate the MD5 hash, I first convert the email to lower 
+case, as this is required by the Gravatar service. Then, because the MD5 
+support in Python works on bytes and not on strings, I encode the string 
+as bytes before passing it on to the hash function.
+
+If you are interested in learning about other options offered by the 
+Gravatar service, visit 
+their [documentation website](https://en.gravatar.com/site/implement/images).
+
+The next step is to insert the avatar images in the user profile 
+template:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <table>
+        <tr valign="top">
+            <td><img src="{{ user.avatar(128) }}"></td>
+            <td><h1>User: {{ user.username }}</h1></td>
+        </tr>
+    </table>
+    <hr>
+    {% for post in posts %}
+    <p>
+    {{ post.author.username }} says: <b>{{ post.body }}</b>
+    </p>
+    {% endfor %}
+{% endblock %}
+```
+
+Run the application, log in to the system with every user and click the 
+"Profile" link. You'll see something like this:
+
+![img](05-profile-page-and-avatars-d.png)
+
+![img](05-profile-page-and-avatars-e.png)
+
+The nice thing about making the `User` class responsible for returning 
+avatar URLs is that if some day I decide Gravatar avatars are not what I 
+want, I can just rewrite the `avatar()` method to return different URLs, 
+and all the templates will start showing the new avatars automatically.
