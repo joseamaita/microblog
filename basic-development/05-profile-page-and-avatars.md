@@ -341,3 +341,42 @@ The nice thing about making the `User` class responsible for returning
 avatar URLs is that if some day I decide Gravatar avatars are not what I 
 want, I can just rewrite the `avatar()` method to return different URLs, 
 and all the templates will start showing the new avatars automatically.
+
+### Show Avatars For The Individual Posts
+
+I have a nice big avatar at the top of the user profile page, but really 
+there is no reason to stop there. I have some posts from the user at the 
+bottom that could each have a little avatar as well. For the user 
+profile page, of course, all posts will have the same avatar, but then I 
+can implement the same functionality on the main page, and then each 
+post will be decorated with the author's avatar, and that will look 
+really nice.
+
+To show avatars for the individual posts I just need to make one more 
+small change in the user template:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <table>
+        <tr valign="top">
+            <td><img src="{{ user.avatar(128) }}"></td>
+            <td><h1>User: {{ user.username }}</h1></td>
+        </tr>
+    </table>
+    <hr>
+    {% for post in posts %}
+    <table>
+        <tr valign="top">
+            <td><img src="{{ post.author.avatar(36) }}"></td>
+            <td>{{ post.author.username }} says:<br>{{ post.body }}</td>
+        </tr>
+    </table>
+    {% endfor %}
+{% endblock %}
+```
+
+![img](05-profile-page-and-avatars-f.png)
+
+![img](05-profile-page-and-avatars-g.png)
