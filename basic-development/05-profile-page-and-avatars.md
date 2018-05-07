@@ -380,3 +380,53 @@ small change in the user template:
 ![img](05-profile-page-and-avatars-f.png)
 
 ![img](05-profile-page-and-avatars-g.png)
+
+### Using Jinja2 Sub-Templates
+
+I designed the user profile page so that it displays the posts written 
+by the user, along with their avatars. Now I want the index page to also 
+display posts with a similar layout. I could just copy/paste the portion 
+of the template that deals with the rendering of a post, but that is 
+really not ideal because later if I decide to make changes to this 
+layout I'm going to have to remember to update both templates.
+
+Instead, I'm going to make a sub-template that just renders one post, 
+and then I'm going to reference it from both the *user.html* 
+and *index.html* templates. To begin, I can create the sub-template, 
+with just the HTML markup for a single post. I'm going to name this 
+template *app/templates/_post.html*. The `_` prefix is just a naming 
+convention to help me recognize which template files are sub-templates.
+
+Let's see the post sub-template:
+
+```html
+    <table>
+        <tr valign="top">
+            <td><img src="{{ post.author.avatar(36) }}"></td>
+            <td>{{ post.author.username }} says:<br>{{ post.body }}</td>
+        </tr>
+    </table>
+```
+
+To invoke this sub-template from the *user.html* template I use 
+Jinja2's `include` statement:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <table>
+        <tr valign="top">
+            <td><img src="{{ user.avatar(128) }}"></td>
+            <td><h1>User: {{ user.username }}</h1></td>
+        </tr>
+    </table>
+    <hr>
+    {% for post in posts %}
+        {% include '_post.html' %}
+    {% endfor %}
+{% endblock %}
+```
+
+The index page of the application isn't really fleshed out yet, so I'm 
+not going to add this functionality there yet.
