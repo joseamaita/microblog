@@ -430,3 +430,120 @@ Jinja2's `include` statement:
 
 The index page of the application isn't really fleshed out yet, so I'm 
 not going to add this functionality there yet.
+
+### More Interesting Profiles
+
+One problem the new user profile pages have is that they don't really 
+show much on them. Users like to tell a bit about them on these pages, 
+so I'm going to let them write something about themselves to show here. 
+I'm also going to keep track of what was the last time each user 
+accessed the site and also show display it on their profile page.
+
+The first I need to do to support all this extra information is to 
+extend the users table in the database with two new fields:
+
+```python
+# app/models.py: New fields in user model
+from datetime import datetime
+from app import db, login_manager
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import UserMixin
+from hashlib import md5
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), index=True, unique=True)
+    email = db.Column(db.String(120), index=True, unique=True)
+    password_hash = db.Column(db.String(128))
+    posts = db.relationship('Post', backref='author', lazy='dynamic')
+    about_me = db.Column(db.String(140))
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def avatar(self, size):
+        digest = md5(self.email.lower().encode('utf-8')).hexdigest()
+        return f'https://www.gravatar.com/avatar/{digest}?d=identicon&s={size}'
+
+class Post(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    body = db.Column(db.String(140))
+    timestamp = db.Column(db.DateTime, 
+                          index = True, 
+                          default = datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+    def __repr__(self):
+        return f'<Post {self.body}>'
+
+@login_manager.user_loader
+def load_user(id):
+    return User.query.get(int(id))
+```
+
+Remember that every time the database is modified it is necessary to 
+generate a database migration. Previously, I showed you how to set up 
+the application to track database changes through migration scripts. Now 
+I have two new fields that I want to add to the database, so the first 
+step is to generate the migration script:
+
+```
+(venv) $ flask db migrate -m "new fields in user model"
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.autogenerate.compare] Detected added column 'user.about_me'
+INFO  [alembic.autogenerate.compare] Detected added column 'user.last_seen'
+  Generating ~/microblog.git/migrations/versions/ece9164d0908_new_fields_in_user_model.py ... done
+```
+
+The output of the `migrate` command looks good, as it shows that the two 
+new fields in the `User` class were detected. Now I can apply this 
+change to the database:
+
+```
+(venv) $ flask db upgrade
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 41cf27f62f9a -> ece9164d0908, new fields in user model
+```
+
+I hope you realize how useful it is to work with a migration framework. 
+Any users that were in the database are still there, the migration 
+framework surgically applies the changes in the migration script without 
+destroying any data.
+
+For the next step, I'm going to add these two new fields to the user 
+profile template:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <table>
+        <tr valign="top">
+            <td><img src="{{ user.avatar(128) }}"></td>
+            <td>
+                <h1>User: {{ user.username }}</h1>
+                {% if user.about_me %}<p>{{ user.about_me }}</p>{% endif %}
+                {% if user.last_seen %}<p>Last seen on: {{ user.last_seen }}</p>{% endif %}
+            </td>
+        </tr>
+    </table>
+    <hr>
+    {% for post in posts %}
+        {% include '_post.html' %}
+    {% endfor %}
+{% endblock %}
+```
+
+Note that I'm wrapping these two fields in Jinja2's conditionals, 
+because I only want them to be visible if they are set. At this point 
+these two new fields are empty for all users, so you are not going to 
+see these fields if you run the application now.
