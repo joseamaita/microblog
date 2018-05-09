@@ -547,3 +547,134 @@ Note that I'm wrapping these two fields in Jinja2's conditionals,
 because I only want them to be visible if they are set. At this point 
 these two new fields are empty for all users, so you are not going to 
 see these fields if you run the application now.
+
+### Recording The Last Visit Time For a User
+
+Let's start with the `last_seen` field, which is the easier of the two. 
+What I want to do is write the current time on this field for a given 
+user whenever that user sends a request to the server.
+
+Adding the logic to set this field on every possible view function that 
+can be requested from the browser is obviously impractical, but 
+executing a bit of generic logic ahead of a request being dispatched to 
+a view function is such a common task in web applications that Flask 
+offers it as a native feature. Take a look at the solution 
+in *app/routes.py*:
+
+```python
+# app/routes.py: Record time of last visit
+from flask import render_template, flash, redirect, url_for, request
+from app import app, db
+from app.forms import LoginForm, RegistrationForm
+from flask_login import current_user, login_user, logout_user, login_required
+from app.models import User
+from werkzeug.urls import url_parse
+from datetime import datetime
+
+
+@app.before_request
+def before_request():
+    if current_user.is_authenticated:
+        current_user.last_seen = datetime.utcnow()
+        db.session.commit()
+
+
+@app.route('/')
+@app.route('/index')
+@login_required
+def index():
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+    return render_template('index.html', 
+                           title = 'Home', 
+                           posts = posts)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid username or password')
+            return redirect(url_for('login'))
+        login_user(user, remember=form.remember_me.data)
+        next_page = request.args.get('next')
+        if not next_page or url_parse(next_page).netloc != '':
+            next_page = url_for('index')
+        return redirect(next_page)
+    return render_template('login.html', title='Sign In', form=form)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        user = User(username=form.username.data, email=form.email.data)
+        user.set_password(form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        flash('Congratulations, you are now a registered user!')
+        return redirect(url_for('login'))
+    return render_template('register.html', title='Register', form=form)
+
+@app.route('/user/<username>')
+@login_required
+def user(username):
+    user = User.query.filter_by(username=username).first_or_404()
+    posts = [
+        {'author': user, 'body': 'Test post #1'}, 
+        {'author': user, 'body': 'Test post #2'}
+    ]
+    return render_template('user.html', user=user, posts=posts)
+```
+
+The `@before_request` decorator from Flask register the decorated 
+function to be executed right before the view function. This is 
+extremely useful because now I can insert code that I want to execute 
+before any view function in the application, and I can have it in a 
+single place. The implementation simply checks if the `current_user` is 
+logged in, and in that case sets the `last_seen` field to the current 
+time. I mentioned this before, a server application needs to work in 
+consistent time units, and the standard practice is to use the UTC time 
+zone. Using the local time of the system is not a good idea, because 
+then what goes in the database is dependent on your location. The last 
+step is to commit the database session, so that the change made above is 
+written to the database. If you are wondering why there is 
+no `db.session.add()` before the commit, consider that when you 
+reference `current_user`, Flask-Login will invoke the user loader 
+callback function, which will run a database query that will put the 
+target user in the database session. So you can add the user again in 
+this function, but it is not necessary because it is already there.
+
+If you view your profile page after you make this change, you will see 
+the "Last seen on" line with a time that is very close to the current 
+time. And if you navigate away from the profile page and then return, 
+you will see that the time is constantly updated.
+
+The fact that I'm storing these timestamps in the UTC timezone makes the 
+time displayed on the profile page also be in UTC. In addition to that, 
+the format of the time is not what you would expect, since it is 
+actually the internal representation of the Python datetime object. For 
+now, I'm not going to worry about these two issues, since I'm going to 
+address the topic of handling dates and times in a web application in a 
+later time.
+
+![img](05-profile-page-and-avatars-h.png)
+
+![img](05-profile-page-and-avatars-i.png)
