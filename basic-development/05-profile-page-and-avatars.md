@@ -678,3 +678,240 @@ later time.
 ![img](05-profile-page-and-avatars-h.png)
 
 ![img](05-profile-page-and-avatars-i.png)
+
+### Profile Editor
+
+I also need to give users a form in which they can enter some 
+information about themselves. The form is going to let users change 
+their username, and also write something about themselves, to be stored 
+in the new `about_me` field. Let's start writing a form class for it:
+
+```python
+# app/forms.py: Profile editor form
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField
+from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length
+from app.models import User
+
+class LoginForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    remember_me = BooleanField('Remember Me')
+    submit = SubmitField('Sign In')
+
+class RegistrationForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired()])
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    password2 = PasswordField(
+        'Repeat Password', validators=[DataRequired(), EqualTo('password')])
+    submit = SubmitField('Register')
+
+    def validate_username(self, username):
+        user = User.query.filter_by(username=username.data).first()
+        if user is not None:
+            raise ValidationError('Please use a different username.')
+
+    def validate_email(self, email):
+        user = User.query.filter_by(email=email.data).first()
+        if user is not None:
+            raise ValidationError('Please use a different email address.')
+
+class EditProfileForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired()])
+    about_me = TextAreaField('About me', validators=[Length(min=0, max=140)])
+    submit = SubmitField('Submit')
+```
+
+I'm using a new field type and a new validator in this form. For the 
+"About" field I'm using a `TextAreaField`, which is a multi-line box in 
+which the user can enter text. To validate this field I'm 
+using `Length`, which will make sure that the text entered is between 0 
+and 140 characters, which is the space I have allocated for the 
+corresponding field in the database.
+
+The template that renders this form in *app/templates/edit_profile.html* 
+is shown below:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Edit Profile</h1>
+    <form action="" method="post">
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.username.label }}<br>
+            {{ form.username(size=32) }}<br>
+            {% for error in form.username.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.about_me.label }}<br>
+            {{ form.about_me(cols=50, rows=4) }}<br>
+            {% for error in form.about_me.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>{{ form.submit() }}</p>
+    </form>
+{% endblock %}
+```
+
+And finally, here is the view function in *app/routes.py* that ties 
+everything together:
+
+```python
+# app/routes.py: Edit profile view function
+from flask import render_template, flash, redirect, url_for, request
+from app import app, db
+from app.forms import LoginForm, RegistrationForm, EditProfileForm
+from flask_login import current_user, login_user, logout_user, login_required
+from app.models import User
+from werkzeug.urls import url_parse
+from datetime import datetime
+
+
+@app.before_request
+def before_request():
+    if current_user.is_authenticated:
+        current_user.last_seen = datetime.utcnow()
+        db.session.commit()
+
+
+@app.route('/')
+@app.route('/index')
+@login_required
+def index():
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+    return render_template('index.html', 
+                           title = 'Home', 
+                           posts = posts)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.username.data).first()
+        if user is None or not user.check_password(form.password.data):
+            flash('Invalid username or password')
+            return redirect(url_for('login'))
+        login_user(user, remember=form.remember_me.data)
+        next_page = request.args.get('next')
+        if not next_page or url_parse(next_page).netloc != '':
+            next_page = url_for('index')
+        return redirect(next_page)
+    return render_template('login.html', title='Sign In', form=form)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        user = User(username=form.username.data, email=form.email.data)
+        user.set_password(form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        flash('Congratulations, you are now a registered user!')
+        return redirect(url_for('login'))
+    return render_template('register.html', title='Register', form=form)
+
+@app.route('/user/<username>')
+@login_required
+def user(username):
+    user = User.query.filter_by(username=username).first_or_404()
+    posts = [
+        {'author': user, 'body': 'Test post #1'}, 
+        {'author': user, 'body': 'Test post #2'}
+    ]
+    return render_template('user.html', user=user, posts=posts)
+
+@app.route('/edit_profile', methods=['GET', 'POST'])
+@login_required
+def edit_profile():
+    form = EditProfileForm()
+    if form.validate_on_submit():
+        current_user.username = form.username.data
+        current_user.about_me = form.about_me.data
+        db.session.commit()
+        flash('Your changes have been saved.')
+        return redirect(url_for('edit_profile'))
+    elif request.method == 'GET':
+        form.username.data = current_user.username
+        form.about_me.data = current_user.about_me
+    return render_template('edit_profile.html', title='Edit Profile', 
+                           form=form)
+```
+
+This view function is slightly different to the other ones that process 
+a form. If `validate_on_submit()` returns `True` I copy the data from 
+the form into the user object and then write the object to the database. 
+But when `validate_on_submit()` returns `False` it can be due to two 
+different reasons. First, it can be because the browser just sent 
+a `GET` request, which I need to respond by providing an initial version 
+of the form template. It can also be when the browser sends a `POST` 
+request with form data, but something in that data is invalid. For this 
+form, I need to treat these two cases separately. When the form is being 
+requested for the first time with a `GET` request, I want to 
+pre-populate the fields with the data that is stored in the database, so 
+I need to do the reverse of what I did on the submission case and move 
+the data stored in the user fields to the form, as this will ensure that 
+those form fields have the current data stored for the user. But in the 
+case of a validation error I do not want to write anything to the form 
+fields, because those were already populated by WTForms. To distinguish 
+between these two cases, I check `request.method`, which will be `GET` 
+for the initial request, and `POST` for a submission that failed 
+validation.
+
+![img](05-profile-page-and-avatars-j.png)
+
+To make it easy for users to access the profile editor page, I can add a 
+link in their profile page:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <table>
+        <tr valign="top">
+            <td><img src="{{ user.avatar(128) }}"></td>
+            <td>
+                <h1>User: {{ user.username }}</h1>
+                {% if user.about_me %}<p>{{ user.about_me }}</p>{% endif %}
+                {% if user.last_seen %}<p>Last seen on: {{ user.last_seen }}</p>{% endif %}
+                {% if user == current_user %}
+                <p><a href="{{ url_for('edit_profile') }}">Edit your profile</a></p>
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+    <hr>
+    {% for post in posts %}
+        {% include '_post.html' %}
+    {% endfor %}
+{% endblock %}
+```
+
+Pay attention to the clever conditional I'm using to make sure that the 
+Edit link appears when you are viewing your own profile, but not when 
+you are viewing the profile of someone else.
+
+![img](05-profile-page-and-avatars-k.png)
