@@ -135,3 +135,60 @@ important application stack traces being dumped on a terminal that I
 need to constantly watch to make sure I don't miss any errors. And of 
 course I have a bug to fix. I'm going to address all these issues, but 
 first, let's talk about Flask's *debug mode*.
+
+### Debug Mode
+
+The way you saw that errors are handled above is great for a system that 
+is running on a production server. If there is an error, the user gets a 
+vague error page (though I'm going to make this error page nicer), and 
+the important details of the error are in the server process output or 
+in a log file.
+
+But when you are developing your application, you can enable debug mode, 
+a mode in which Flask outputs a really nice debugger directly on your 
+browser. To activate debug mode, stop the application, and then set the 
+following environment variable:
+
+```
+(venv) $ export FLASK_DEBUG=1
+```
+
+After you set `FLASK_DEBUG`, restart the server. The output on your 
+terminal is going to be slightly different than what you are used to 
+see:
+
+```
+(venv) $ flask run
+ * Serving Flask app "microblog"
+ * Forcing debug mode on
+ * Running on http://127.0.0.1:5000/ (Press CTRL+C to quit)
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 490-502-390
+```
+
+Now make the application crash one more time to see the interactive 
+debugger in your browser:
+
+![img](06-error-handling-c.png)
+
+The debugger allows you expand each stack frame and see the 
+corresponding source code. You can also open a Python prompt on any of 
+the frames and execute any valid Python expressions, for example to 
+check the values of variables.
+
+It is extremely important that you never run a Flask application in 
+debug mode on a production server. The debugger allows the user to 
+remotely execute code in the server, so it can be an unexpected gift to 
+a malicious user who wants to infiltrate your application or your 
+server. As an additional security measure, the debugger running in the 
+browser starts locked, and on first use will ask for a PIN number, which 
+you can see in the output of the `flask run` command.
+
+Since I am in the topic of debug mode, I should mention the second 
+important feature that is enabled with debug mode, which is 
+the *reloader*. This is a very useful development feature that 
+automatically restarts the application when a source file is modified. 
+If you run `flask run` while in debug mode, you can then work on your 
+application and any time you save a file, the application will restart 
+to pick up the new code.
