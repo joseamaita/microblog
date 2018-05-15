@@ -192,3 +192,87 @@ automatically restarts the application when a source file is modified.
 If you run `flask run` while in debug mode, you can then work on your 
 application and any time you save a file, the application will restart 
 to pick up the new code.
+
+### Custom Error Pages
+
+Flask provides a mechanism for an application to install its own error 
+pages, so that your users don't have to see the plain and boring default 
+ones. As an example, let's define custom error pages for the HTTP errors 
+404 and 500, the two most common ones. Defining pages for other errors 
+works in the same way.
+
+To declare a custom error handler, the `@errorhandler` decorator is 
+used. I'm going to put my error handlers in a new *app/errors.py* 
+module. Let's see the file:
+
+```python
+# app/errors.py: Custom error handlers
+from flask import render_template
+from app import app, db
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('404.html'), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return render_template('500.html'), 500
+```
+
+The error functions work very similarly to view functions. For these two 
+errors, I'm returning the contents of their respective templates. Note 
+that both functions return a second value after the template, which is 
+the error code number. For all the view functions that I created so far, 
+I did not need to add a second return value because the default of 200 
+(the status code for a successful response) is what I wanted. In this 
+case these are error pages, so I want the status code of the response to 
+reflect that.
+
+The error handler for the 500 errors could be invoked after a database 
+error, which was actually the case with the username duplicate above. To 
+make sure any failed database sessions do not interfere with any 
+database accesses triggered by the template, I issue a session rollback. 
+This resets the session to a clean state.
+
+Here is the template for the 404 error:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>File Not Found</h1>
+    <p><a href="{{ url_for('index') }}">Back</a></p>
+{% endblock %}
+```
+
+And here is the one for the 500 error:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>An unexpected error has occurred</h1>
+    <p>The administrator has been notified. Sorry for the inconvenience!</p>
+    <p><a href="{{ url_for('index') }}">Back</a></p>
+{% endblock %}
+```
+
+Both templates inherit from the `base.html` template, so that the error 
+page has the same look and feel as the normal pages of the application.
+
+To get these error handlers registered with Flask, I need to import the 
+new *app/errors.py* module after the application instance is created:
+
+```python
+# app/__init__.py: Import error handlers
+# ...
+
+from app import routes, models, errors
+```
+
+If you set `FLASK_DEBUG=0` in your terminal session and then trigger the 
+duplicate username bug one more time, you are going to see a slightly 
+more friendly error page.
+
+![img](06-error-handling-d.png)
