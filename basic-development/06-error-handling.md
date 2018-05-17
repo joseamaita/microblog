@@ -276,3 +276,135 @@ duplicate username bug one more time, you are going to see a slightly
 more friendly error page.
 
 ![img](06-error-handling-d.png)
+
+### Sending Errors by Email
+
+The other problem with the default error handling provided by Flask is 
+that there are no notifications, stack trace for errors are printed to 
+the terminal, which means that the output of the server process needs to 
+be monitored to discover errors. When you are running the application 
+during development, this is perfectly fine, but once the application is 
+deployed on a production server, nobody is going to be looking at the 
+output, so a more robust solution needs to be put in place.
+
+I think it is very important that I take a proactive approach regarding 
+errors. If an error occurs on the production version of the application, 
+I want to know right away. So my first solution is going to be to 
+configure Flask to send me an email immediately after an error, with the 
+stack trace of the error in the email body.
+
+The first step is to add the email server details to the configuration 
+file:
+
+```python
+# config.py: Email configuration
+import secrets
+import os
+basedir = os.path.abspath(os.path.dirname(__file__))
+
+class Config(object):
+    SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        'sqlite:///' + os.path.join(basedir, 'app.db')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    MAIL_SERVER = os.environ.get('MAIL_SERVER')
+    MAIL_PORT = int(os.environ.get('MAIL_PORT') or 25)
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS') is not None
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
+    ADMINS = ['j.maita@3leautomation.com']
+```
+
+The configuration variables for email include the server and port, a 
+boolean flag to enable encrypted connections, and optional username and 
+password. The five configuration variables are sourced from their 
+environment variable counterparts. If the email server is not set in the 
+environment, then I will use that as a sign that emailing errors needs 
+to be disabled. The email server port can also be given in an 
+environment variable, but if not set, the standard port 25 is used. 
+Email server credentials are by default not used, but can be provided if 
+needed. The `ADMINS` configuration variable is a list of the email 
+addresses that will receive error reports, so your own email address 
+should be in that list.
+
+Flask uses Python's `logging` package to write its logs, and this 
+package already has the ability to send logs by email. All I need to do 
+to get emails sent out on errors is to add 
+a [SMTPHandler](https://docs.python.org/3.6/library/logging.handlers.html#smtphandler) 
+instance to the Flask logger object, which is `app.logger`:
+
+```python
+# app/__init__.py: Log errors by email
+import logging
+from logging.handlers import SMTPHandler
+
+# ...
+
+if not app.debug:
+    if app.config['MAIL_SERVER']:
+        auth = None
+        if app.config['MAIL_USERNAME'] or app.config['MAIL_PASSWORD']:
+            auth = (app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
+        secure = None
+        if app.config['MAIL_USE_TLS']:
+            secure = ()
+        mail_handler = SMTPHandler(
+            mailhost=(app.config['MAIL_SERVER'], app.config['MAIL_PORT']),
+            fromaddr='no-reply@' + app.config['MAIL_SERVER'],
+            toaddrs=app.config['ADMINS'], subject='Microblog Failure',
+            credentials=auth, secure=secure)
+        mail_handler.setLevel(logging.ERROR)
+        app.logger.addHandler(mail_handler)
+```
+
+As you can see, I'm only going to enable the email logger when the 
+application is running without debug mode, which is indicated 
+by `app.debug` being `True`, and also when the email server exists in 
+the configuration.
+
+Setting up the email logger is somewhat tedious due to having to handle 
+optional security options that are present in many email servers. But in 
+essence, the code above creates a `SMTPHandler` instance, sets its level 
+so that it only reports errors and not warnings, informational or 
+debugging messages, and finally attaches it to the `app.logger` object 
+from Flask.
+
+There are two approaches to test this feature. The easiest one is to use 
+the SMTP debugging server from Python. This is a fake email server that 
+accepts emails, but instead of sending them, it prints them to the 
+console. To run this server, open a second terminal session and run the 
+following command on it:
+
+```
+(venv) $ python -m smtpd -n -c DebuggingServer localhost:8025
+```
+
+Leave the debugging SMTP server running and go back to your first 
+terminal and set `export MAIL_SERVER=localhost` 
+and `export MAIL_PORT=8025` in the environment. Make sure 
+the `FLASK_DEBUG` variable is set to `0` or not set at all, since the 
+application will not send emails in debug mode. Run the application and 
+trigger the SQLAlchemy error one more time to see how the terminal 
+session running the fake email server shows an email with the full stack 
+trace of the error.
+
+A second testing approach for this feature is to configure a real email 
+server. Below is the configuration to use your Gmail account's email 
+server:
+
+```
+(venv) $ export MAIL_SERVER=smtp.googlemail.com
+(venv) $ export MAIL_PORT=587
+(venv) $ export MAIL_USE_TLS=1
+(venv) $ export MAIL_USERNAME=<your-gmail-username>
+(venv) $ export MAIL_PASSWORD=<your-gmail-password>
+```
+
+The security features in your Gmail account may prevent the application 
+from sending emails through it unless you explicitly allow "less secure 
+apps" access to your Gmail account. You can read about 
+this [here](https://support.google.com/accounts/answer/6010255?hl=en), 
+and if you are concerned about the security of your account, you can 
+create a secondary account that you configure just for testing emails, 
+or you can enable less secure apps only temporarily to run this test and 
+then revert back to the default.
