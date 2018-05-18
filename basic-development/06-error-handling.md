@@ -408,3 +408,65 @@ and if you are concerned about the security of your account, you can
 create a secondary account that you configure just for testing emails, 
 or you can enable less secure apps only temporarily to run this test and 
 then revert back to the default.
+
+### Logging to a File
+
+Receiving errors via email is nice, but sometimes this isn't enough. 
+There are some failure conditions that do not end in a Python exception 
+and are not a major problem, but they may still be interesting enough to 
+save for debugging purposes. For this reason, I'm also going to maintain 
+a log file for the application.
+
+To enable a file-based log handler, this time of 
+type [RotatingFileHandler](https://docs.python.org/3.6/library/logging.handlers.html#rotatingfilehandler), 
+needs to be attached to the application logger, in a similar way to the 
+email handler. Let's see:
+
+```python
+# app/__init__.py: Logging to a file
+# ...
+from logging.handlers import RotatingFileHandler
+import os
+
+# ...
+
+if not app.debug:
+    # ...
+
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+    file_handler = RotatingFileHandler('logs/microblog.log', 
+                                       maxBytes=10240, 
+                                       backupCount=10)
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'))
+    file_handler.setLevel(logging.INFO)
+    app.logger.addHandler(file_handler)
+
+    app.logger.setLevel(logging.INFO)
+    app.logger.info('Microblog startup')
+```
+
+I'm writing the log file with name `microblog.log` in a *logs* 
+directory, which I create if it doesn't already exist.
+
+The `RotatingFileHandler` class is nice because it rotates the logs, 
+ensuring that the log files do not grow too large when the application 
+runs for a long time. In this case I'm limiting the size of the log file 
+to 10KB, and I'm keeping the last ten log files as backup.
+
+The `logging.Formatter` class provides custom formatting for the log 
+messages. Since these messages are going to a file, I want them to have 
+as much information as possible. So I'm using a format that includes the 
+timestamp, the logging level, the message and the source file and line 
+number from where the log entry originated.
+
+To make the logging more useful, I'm also lowering the logging level to 
+the `INFO` category, both in the application logger and the file logger 
+handler. In case you are not familiar with the logging categories, they 
+are `DEBUG`, `INFO`, `WARNING`, `ERROR` and `CRITICAL` in increasing 
+order of severity.
+
+As a first interesting use of the log file, the server writes a line to 
+the logs each time it starts. When this application runs on a production 
+server, these log entries will tell you when the server was restarted.
