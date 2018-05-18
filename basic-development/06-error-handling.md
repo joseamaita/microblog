@@ -470,3 +470,72 @@ order of severity.
 As a first interesting use of the log file, the server writes a line to 
 the logs each time it starts. When this application runs on a production 
 server, these log entries will tell you when the server was restarted.
+
+### Fixing the Duplicate Username Bug
+
+I have exploited the username duplication bug for too long. Now that I 
+have showed you how to prepare the application to handle this type of 
+errors, I can go ahead and fix it.
+
+If you recall, the `RegistrationForm` already implements validation for 
+usernames, but the requirements of the edit form are slightly different. 
+During registration, I need to make sure the username entered in the 
+form does not exist in the database. On the edit profile form I have to 
+do the same check, but with one exception. If the user leaves the 
+original username untouched, then the validation should allow it, since 
+that username is already assigned to that user. Below you can see how I 
+implemented the username validation for this form:
+
+```python
+# app/forms.py: Validate username in edit profile form
+# ...
+
+class EditProfileForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired()])
+    about_me = TextAreaField('About me', validators=[Length(min=0, max=140)])
+    submit = SubmitField('Submit')
+
+    def __init__(self, original_username, *args, **kwargs):
+        super(EditProfileForm, self).__init__(*args, **kwargs)
+        self.original_username = original_username
+
+    def validate_username(self, username):
+        if username.data != self.original_username:
+            user = User.query.filter_by(username=self.username.data).first()
+            if user is not None:
+                raise ValidationError('Please use a different username.')
+```
+
+The implementation is in a custom validation method, but there is an 
+overloaded constructor that accepts the original username as an 
+argument. This username is saved as an instance variable, and checked in 
+the `validate_username()` method. If the username entered in the form is 
+the same as the original username, then there is no reason to check the 
+database for duplicates.
+
+To use this new validation method, I need to add the original username 
+argument in the view function, where the form object is created:
+
+```python
+# app/routes.py: Loads the current user into the edit profile form
+@app.route('/edit_profile', methods=['GET', 'POST'])
+@login_required
+def edit_profile():
+    form = EditProfileForm(current_user.username)
+    # ...
+```
+
+Now the bug is fixed and duplicates in the edit profile form will be 
+prevented in most cases. This is not a perfect solution, because it may 
+not work when two or more processes are accessing the database at the 
+same time. In that situation, a race condition could cause the 
+validation to pass, but a moment later when the rename is attempted the 
+database was already changed by another process and cannot rename the 
+user. This is somewhat unlikely except for very busy applications that 
+have a lot of server processes, so I'm not going to worry about it for 
+now.
+
+At this point you can try to reproduce the error one more time to see 
+how the new form validation method prevents it.
+
+![img](06-error-handling-e.png)
