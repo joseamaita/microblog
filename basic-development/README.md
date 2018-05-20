@@ -6,3 +6,4 @@
 * User Logins
 * Profile Page and Avatars
 * Error Handling
+* Followers
