@@ -94,3 +94,39 @@ representation is similar, but a constraint is added to the database to
 prevent the "many" side to have more than one link. While there are 
 cases in which this type of relationship is useful, it isn't as common 
 as the other types.
+
+### Representing Followers
+
+Looking at the summary of all the relationship types, it is easy to 
+determine that the proper data model to track followers is the 
+many-to-many relationship, because a user follows *many* users, and a 
+user has *many* followers. But there is a twist. In the students and 
+teachers example I had two entities that were related through the 
+many-to-many relationship. But in the case of followers, I have users 
+following other users, so there is just users. So what is the second 
+entity of the many-to-many relationship?
+
+The second entity of the relationship is also the users. A relationship 
+in which instances of a class are linked to other instances of the same 
+class is called a *self-referential relationship*, and that is exactly 
+what I have here.
+
+Here is a diagram of the self-referential many-to-many relationship that 
+keeps track of followers:
+
+```
+users                                        followers
+-----                                        ---------
+id                 INTEGER     ------------- follower_id        INTEGER
+username           VARCHAR(64)       |------ folowed_id         INTEGER
+email              VARCHAR(120)
+password_hash      VARCHAR(128)
+```
+
+The `followers` table is the association table of the relationship. The 
+foreign keys in this table are both pointing at entries in the user 
+table, since it is linking users to users. Each record in this table 
+represents one link between a follower user and a followed user. Like 
+the students and teachers example, a setup like this one allows the 
+database to answer all the questions about followed and follower users 
+that I will ever need. Pretty neat.
