@@ -130,3 +130,97 @@ represents one link between a follower user and a followed user. Like
 the students and teachers example, a setup like this one allows the 
 database to answer all the questions about followed and follower users 
 that I will ever need. Pretty neat.
+
+### Database Model Representation
+
+Let's add followers to the database first. Here is the `followers` 
+association table:
+
+```python
+# app/models.py: Followers association table
+followers = db.Table(
+    'followers', 
+    db.Column('follower_id', db.Integer, db.ForeignKey('user.id')), 
+    db.Column('followed_id', db.Integer, db.ForeignKey('user.id'))
+)
+```
+
+This is a direct translation of the association table from my diagram 
+above. Note that I am not declaring this table as a model, like I did 
+for the users and posts tables. Since this is an auxiliary table that 
+has no data other than the foreign keys, I created it without an 
+associated model class.
+
+Now, I can declare the many-to-many relationship in the users table:
+
+```python
+# app/models.py: Many-to-many followers relationship
+class User(UserMixin, db.Model):
+    # ...
+    followed = db.relationship(
+        'User', secondary=followers,
+        primaryjoin=(followers.c.follower_id == id),
+        secondaryjoin=(followers.c.followed_id == id),
+        backref=db.backref('followers', lazy='dynamic'), lazy='dynamic')
+```
+
+The setup of the relationship is non-trivial. Like I did for the `posts` 
+one-to-many relationship, I'm using the `db.relationship` function to 
+define the relationship in the model class. This relationship 
+links `User` instances to other `User` instances, so as a convention 
+let's say that for a pair of users linked by this relationship, the left 
+side user is following the right side user. I'm defining the 
+relationship as seen from the left side user with the name `followed`, 
+because when I query this relationship from the left side I will get the 
+list of followed users (i.e those on the right side). Let's examine all 
+the arguments to the `db.relationship()` call one by one:
+
+* `'User'` is the right side entity of the relationship (the left side 
+entity is the parent class). Since this is a self-referential 
+relationship, I have to use the same class on both sides.
+* `secondary` configures the association table that is used for this 
+relationship, which I defined right above this class.
+* `primaryjoin` indicates the condition that links the left side entity 
+(the follower user) with the association table. The join condition for 
+the left side of the relationship is the user ID matching 
+the `follower_id` field of the association table. 
+The `followers.c.follower_id` expression references the `follower_id` 
+column of the association table.
+* `secondaryjoin` indicates the condition that links the right side 
+entity (the followed user) with the association table. This condition is 
+similar to the one for `primaryjoin`, with the only difference that now 
+I'm using `followed_id`, which is the other foreign key in the 
+association table.
+* `backref` defines how this relationship will be accessed from the 
+right side entity. From the left side, the relationship is 
+named `followed`, so from the right side I am going to use the 
+name `followers` to represent all the left side users that are linked to 
+the target user in the right side. The additional `lazy` argument 
+indicates the execution mode for this query. A mode of `dynamic` sets up 
+the query to not run until specifically requested, which is also how I 
+set up the posts one-to-many relationship.
+* `lazy` is similar to the parameter of the same name in the `backref`, 
+but this one applies to the left side query instead of the right side.
+
+Don't worry if this is hard to understand. I will show you how to work 
+with these queries in a moment, and then everything will become clearer.
+
+The changes to the database need to be recorded in a new database 
+migration:
+
+```
+(venv) $ flask db migrate -m "followers"
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.autogenerate.compare] Detected added table 'followers'
+  Generating ~/microblog.git/migrations/versions/3bdea0756e88_followers.py ... done
+```
+
+The database upgrade is:
+
+```
+(venv) $ flask db upgrade
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade ece9164d0908 -> 3bdea0756e88, followers
+```
