@@ -224,3 +224,72 @@ INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
 INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
 INFO  [alembic.runtime.migration] Running upgrade ece9164d0908 -> 3bdea0756e88, followers
 ```
+
+### Adding and Removing "follows"
+
+Thanks to the SQLAlchemy ORM, a user following another user can be 
+recorded in the database working with the `followed` relationship as if 
+it was a list. For example, if I had two users stored in `user1` 
+and `user2` variables, I can make the first follow the second with this 
+simple statement:
+
+```
+user1.followed.append(user2)
+```
+
+To stop following the user, then I could do:
+
+```
+user1.followed.remove(user2)
+```
+
+Even though adding and removing followers is fairly easy, I want to 
+promote reusability in my code, so I'm not going to sprinkle "appends" 
+and "removes" through the code. Instead, I'm going to implement the 
+"follow" and "unfollow" functionality as methods in the `User` model. It 
+is always best to move the application logic away from view functions 
+and into models or other auxiliary classes or modules, because as you 
+will see later here, that makes unit testing much easier.
+
+Below are the changes in the user model to add and remove relationships:
+
+```python
+# app/models.py: Add and remove followers
+class User(UserMixin, db.Model):
+    #...
+
+    def follow(self, user):
+        if not self.is_following(user):
+            self.followed.append(user)
+
+    def unfollow(self, user):
+        if self.is_following(user):
+            self.followed.remove(user)
+
+    def is_following(self, user):
+        return self.followed.filter(
+            followers.c.followed_id == user.id).count() > 0
+```
+
+The `follow()` and `unfollow()` methods use the `append()` 
+and `remove()` methods of the relationship object as I have shown above, 
+but before they touch the relationship they use the `is_following()` 
+supporting method to make sure the requested action makes sense. For 
+example, if I ask `user1` to follow `user2`, but it turns out that this 
+following relationship already exists in the database, I do not want to 
+add a duplicate. The same logic can be applied to unfollowing.
+
+The `is_following()` method issues a query on the `followed` 
+relationship to check if a link between two users already exists. You 
+have seen me use the `filter_by()` method of the SQLAlchemy query object 
+before, for example to find a user given its username. The `filter()` 
+method that I'm using here is similar, but lower level, as it can 
+include arbitrary filtering conditions, unlike `filter_by()` which can 
+only check for equality to a constant value. The condition that I'm 
+using in `is_following()` looks for items in the association table that 
+have the left side foreign key set to the `self` user, and the right 
+side set to the `user` argument. The query is terminated with 
+a `count()` method, which returns the number of results. The result of 
+this query is going to be `0` or `1`, so checking for the count being 1 
+or greater than 0 is actually equivalent. Other query terminators you 
+have seen me use in the past are `all()` and `first()`.
