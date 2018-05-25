@@ -1,4 +1,4 @@
-# app/models.py: Add and remove followers
+# app/models.py: Followed posts query
 from datetime import datetime
 from app import db, login_manager
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -51,6 +51,12 @@ class User(UserMixin, db.Model):
     def is_following(self, user):
         return self.followed.filter(
             followers.c.followed_id == user.id).count() > 0
+
+    def followed_posts(self):
+        return Post.query.join(
+            followers, (followers.c.followed_id == Post.user_id)).filter(
+                followers.c.follower_id == self.id).order_by(
+                    Post.timestamp.desc())
 
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)

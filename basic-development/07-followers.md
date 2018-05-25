@@ -293,3 +293,189 @@ a `count()` method, which returns the number of results. The result of
 this query is going to be `0` or `1`, so checking for the count being 1 
 or greater than 0 is actually equivalent. Other query terminators you 
 have seen me use in the past are `all()` and `first()`.
+
+### Obtaining the Posts from Followed Users
+
+Support for followers in the database is almost complete, but I'm 
+actually missing one important feature. In the index page of the 
+application I'm going to show blog posts written by all the people that 
+are followed by the logged in user, so I need to come up with a database 
+query that returns these posts.
+
+The most obvious solution is to run a query that returns the list of 
+followed users, which as you already know, it would 
+be `user.followed.all()`. Then for each of these returned users I can 
+run a query to get the posts. Once I have all the posts I can merge them 
+into a single list and sort them by date. Sounds good? Well, not really.
+
+This approach has a couple of problems. What happens if a user is 
+following a thousand people? I would need to execute a thousand database 
+queries just to collect all the posts. And then I will need to merge and 
+sort the thousand lists in memory. As a secondary problem, consider that 
+the application's home page will eventually have *pagination* 
+implemented, so it will not display all the available posts but just the 
+first few, with a link to get more if desired. If I'm going to display 
+posts sorted by their date, how can I know which posts are the most 
+recent of all followed users combined, unless I get all the posts and 
+sort them first? This is actually an awful solution that does not scale 
+well.
+
+There is really no way to avoid this merging and sorting of blog posts, 
+but doing it in the application results in a very inefficient process. 
+This kind of work is what relational databases excel at. The database 
+has indexes that allow it to perform the queries and the sorting in a 
+much more efficient way that I can possibly do from my side. So what I 
+really want is to come up with a single database query that defines the 
+information that I want to get, and then let the database figure out how 
+to extract that information in the most efficient way.
+
+Below you can see this query:
+
+```python
+# app/models.py: Followed posts query
+class User(UserMixin, db.Model):
+    #...
+    def followed_posts(self):
+        return Post.query.join(
+            followers, (followers.c.followed_id == Post.user_id)).filter(
+                followers.c.follower_id == self.id).order_by(
+                    Post.timestamp.desc())
+```
+
+This is by far the most complex query I have used on this application. 
+I'm going to try to decipher this query one piece at a time. If you look 
+at the structure of this query, you are going to notice that there are 
+three main sections designed by the `join()`, `filter()` 
+and `order_by()` methods of the SQLAlchemy query object:
+
+```
+Post.query.join(...).filter(...).order_by(...)
+```
+
+**Joins**
+
+To understand what a join operation does, let's look at an example. 
+Let's assume that I have a `User` table with the following contents:
+
+id | username
+-- | --------
+1 | mary
+2 | lucy
+3 | john
+4 | david
+
+To keep things simple I am not showing all the fields in the user model, 
+just the ones that are important for this query.
+
+Let's say that the `followers` association table says that user `mary` 
+is following users `lucy` and `david`, user `lucy` is following `john` 
+and user `john` is following `david`. The data that represents the above 
+is this:
+
+follower_id | followed_id
+----------- | -----------
+1 | 2
+1 | 4
+2 | 3
+3 | 4
+
+Finally, the posts table contains one post from each user:
+
+id | text | user_id
+-- | ---- | -------
+1 | post from lucy | 2
+2 | post from john | 3
+3 | post from david | 4
+4 | post from mary | 1
+
+This table also omits some fields that are not part of this discussion.
+
+Here is the `join()` call that I defined for this query once again:
+
+```
+Post.query.join(followers, (followers.c.followed_id == Post.user_id))
+```
+
+I'm invoking the join operation on the posts table. The first argument 
+is the followers association table, and the second argument is the 
+join *condition*. What I'm saying with this call is that I want the 
+database to create a temporary table that combines data from posts and 
+followers tables. The data is going to be merged according to the 
+condition that I passed as argument.
+
+The condition that I used says that the `followed_id` field of the 
+followers table must be equal to the `user_id` of the posts table. To 
+perform this merge, the database will take each record from the posts 
+table (the left side of the join) and append any records from 
+the `followers` table (the right side of the join) that match the 
+condition. If multiple records in `followers` match the condition, then 
+the post entry will be repeated for each. If for a given post there is 
+no match in followers, then that post record is not part of the join.
+
+With the example data I defined above, the result of the join operation 
+is:
+
+id | text | user_id | follower_id | followed_id
+-- | ---- | ------- | ----------- | -----------
+1 | post from lucy | 2 | 1 | 2
+2 | post from john | 3 | 2 | 3
+3 | post from david | 4 | 1 | 4
+3 | post from david | 4 | 3 | 4
+
+Note how the `user_id` and `followed_id` columns are equal in all cases, 
+as this was the join condition. The post from user `mary` does not 
+appear in the joined table because there are no entries in followers 
+that have `mary` as a followed user, or in other words, nobody is 
+following `mary`. And the post from `david` appears twice, because that 
+user is followed by two different users.
+
+It may not be immediately clear what do I gain by creating this join, 
+but keep reading, as this is just one part of the bigger query.
+
+**Filters**
+
+The join operation gave me a list of all the posts that are followed by 
+some user, which is a lot more data that I really want. I'm only 
+interested in a subset of this list, the posts followed by a single 
+user, so I need trim all the entries I don't need, which I can do with 
+a `filter()` call.
+
+Here is the filter portion of the query:
+
+```
+filter(followers.c.follower_id == self.id)
+```
+
+Since this query is in a method of class `User`, the `self.id` 
+expression refers to the user ID of the user I'm interested in. 
+The `filter()` call selects the items in the joined table that have 
+the `follower_id` column set to this user, which in other words means 
+that I'm keeping only the entries that have this user as a follower.
+
+Let's say the user I'm interested in is `mary`, which has its `id` field 
+set to 1. Here is how the joined table looks after the filtering:
+
+id | text | user_id | follower_id | followed_id
+-- | ---- | ------- | ----------- | -----------
+1 | post from lucy | 2 | 1 | 2
+3 | post from david | 4 | 1 | 4
+
+And these are exactly the posts that I wanted!
+
+Remember that the query was issued on the `Post` class, so even though I 
+ended up with a temporary table that was created by the database as part 
+of this query, the result will be the posts that are included in this 
+temporary table, without the extra columns added by the join operation.
+
+**Sorting**
+
+The final step of the process is to sort the results. The part of the 
+query that does that says:
+
+```
+order_by(Post.timestamp.desc())
+```
+
+Here I'm saying that I want the results sorted by the timestamp field of 
+the post in descending order. With this ordering, the first result will 
+be the most recent blog post.
