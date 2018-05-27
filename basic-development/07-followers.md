@@ -479,3 +479,40 @@ order_by(Post.timestamp.desc())
 Here I'm saying that I want the results sorted by the timestamp field of 
 the post in descending order. With this ordering, the first result will 
 be the most recent blog post.
+
+### Combining Own and Followed Posts
+
+The query that I'm using in the `followed_posts()` function is extremely 
+useful, but has one limitation. People expect to see their own posts 
+included in their timeline of followed users, and the query as it is 
+does not have that capability.
+
+There are two possible ways to expand this query to include the user's 
+own posts. The most straightforward way is to leave the query as it is, 
+but make sure all users are following themselves. If you are your own 
+follower, then the query as shown above will find your own posts along 
+with those of all the people you follow. The disadvantage of this method 
+is that it affects the stats regarding followers. All follower counts 
+are going to be inflated by one, so they'll have to be adjusted before 
+they are shown. The second way to do this is by create a second query 
+that returns the user's own posts, and then use the "union" operator to 
+combine the two queries into a single one.
+
+After considering both options, I decided to go with the second one. 
+Below you can see the `followed_posts()` function after it has been 
+expanded to include the user's posts through a union:
+
+```python
+# app/models.py: Followed posts query with user's own posts
+class User(UserMixin, db.Model):
+    #...
+    def followed_posts(self):
+        followed = Post.query.join(
+            followers, (followers.c.followed_id == Post.user_id)).filter(
+                followers.c.follower_id == self.id)
+        own = Post.query.filter_by(user_id=self.id)
+        return followed.union(own).order_by(Post.timestamp.desc())
+```
+
+Note how the `followed` and `own` queries are combined into one, before 
+the sorting is applied.
