@@ -99,7 +99,7 @@ component, Flask will accept any text in that portion of the URL, and
 will invoke the view function with the actual text as an argument. For 
 example, if the client browser requests URL `/user/mary`, the view 
 function is going to be called with the argument `username` set 
-to `'susan'`. This view function is only going to be accessible to 
+to `'mary'`. This view function is only going to be accessible to 
 logged in users, so I have added the `@login_required` decorator from 
 Flask-Login.
 
@@ -240,7 +240,7 @@ for users that do not have an avatar registered with the service. My
 favorite is called "identicon", which returns a nice geometric design 
 that is different for every email. For example:
 
-![img](https://www.gravatar.com/avatar/f393bea66bb04194c81b875b2f308159)
+![img](https://www.gravatar.com/avatar/f393bea66bb04194c81b875b2f308159?d=identicon&s=128)
 
 Note that some web browser extensions such as Ghostery block Gravatar 
 images, as they consider that Automattic (the owners of the Gravatar 
