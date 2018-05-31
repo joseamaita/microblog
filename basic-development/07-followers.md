@@ -656,3 +656,116 @@ From now on, every time a change is made to the application, you can
 re-run the tests to make sure the features that are being tested have 
 not been affected. Also, each time another feature is added to the 
 application, a unit test should be written for it.
+
+### Integrating Followers with the Application
+
+The support of followers in the database and models is now complete, but 
+I don't have any of this functionality incorporated into the 
+application, so I'm going to add that now. The good news is that there 
+are no big challenges in doing this, it's all based on concepts you have 
+already learned.
+
+Let's add two new routes in the application to follow and unfollow a 
+user:
+
+```python
+# app/routes.py: Follow and unfollow routes
+@app.route('/follow/<username>')
+@login_required
+def follow(username):
+    user = User.query.filter_by(username=username).first()
+    if user is None:
+        flash(f'User {username} not found.')
+        return redirect(url_for('index'))
+    if user == current_user:
+        flash('You cannot follow yourself!')
+        return redirect(url_for('user', username=username))
+    current_user.follow(user)
+    db.session.commit()
+    flash(f'You are following {username}!')
+    return redirect(url_for('user', username=username))
+
+
+@app.route('/unfollow/<username>')
+@login_required
+def unfollow(username):
+    user = User.query.filter_by(username=username).first()
+    if user is None:
+        flash(f'User {username} not found.')
+        return redirect(url_for('index'))
+    if user == current_user:
+        flash('You cannot unfollow yourself!')
+        return redirect(url_for('user', username=username))
+    current_user.unfollow(user)
+    db.session.commit()
+    flash(f'You are not following {username}.')
+    return redirect(url_for('user', username=username))
+```
+
+These should be self-explanatory, but pay attention to all the error 
+checking that I'm doing to prevent unexpected issues and try to provide 
+a useful message to the user when a problem has occurred.
+
+With the view functions now in place, I can link to them from pages in 
+the application. I'm going to add links to follow and unfollow a user in 
+the profile page of each user:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <table>
+        <tr valign="top">
+            <td><img src="{{ user.avatar(128) }}"></td>
+            <td>
+                <h1>User: {{ user.username }}</h1>
+                {% if user.about_me %}<p>{{ user.about_me }}</p>{% endif %}
+                {% if user.last_seen %}<p>Last seen on: {{ user.last_seen }}</p>{% endif %}
+                <p>{{ user.followers.count() }} followers, {{ user.followed.count() }} following.</p>
+                {% if user == current_user %}
+                <p><a href="{{ url_for('edit_profile') }}">Edit your profile</a></p>
+                {% elif not current_user.is_following(user) %}
+                <p><a href="{{ url_for('follow', username=user.username) }}">Follow</a></p>
+                {% else %}
+                <p><a href="{{ url_for('unfollow', username=user.username) }}">Unfollow</a></p>
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+    <hr>
+    {% for post in posts %}
+        {% include '_post.html' %}
+    {% endfor %}
+{% endblock %}
+```
+
+The changes to the user profile template add a line below the last seen 
+timestamp that shows how many followers and followed users this user 
+has. And the line that has the "Edit" link when you are viewing your own 
+profile now can have one of three possible links:
+
+* If the user is viewing his or her own profile, the "Edit" link shows 
+as before.
+* If the user is viewing a user that is not currently followed, the 
+"Follow" link shows.
+* If the user is viewing a user that is currently followed, the 
+"Unfollow" link shows.
+
+At this point you can run the application, create a few users and play 
+with following and unfollowing users. The only thing you need to 
+remember is to type the profile page URL of the user you want to follow 
+or unfollow, since there is currently no way to see a list of users. For 
+example, if you want to follow a user with the `david` username, you will 
+need to type *http://localhost:5000/user/david* in the browser's address 
+bar to access the profile page for that user. Make sure you check how 
+the followed and follower user counts change as you issue follows or 
+unfollows.
+
+![img](07-followers-a.png)
+
+![img](07-followers-b.png)
+
+I should be showing the list of followed posts in the index page of the 
+application, but I don't have all the pieces in place to do that yet, 
+since users cannot write blog posts yet. So I'm going to delay this 
+change until that functionality is in place.
