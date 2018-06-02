@@ -1,4 +1,4 @@
-# app/routes.py: Post submission form in index view function
+# app/routes.py: Display real posts in home page
 from flask import render_template, flash, redirect, url_for, request
 from app import app, db
 from app.forms import LoginForm, RegistrationForm, EditProfileForm, PostForm
@@ -26,16 +26,7 @@ def index():
         db.session.commit()
         flash('Your post is now live!')
         return redirect(url_for('index'))
-    posts = [
-        {
-            'author': {'username': 'John'},
-            'body': 'Beautiful day in Portland!'
-        },
-        {
-            'author': {'username': 'Susan'},
-            'body': 'The Avengers movie was so cool!'
-        }
-    ]
+    posts = current_user.followed_posts().all()
     return render_template('index.html', 
                            title = 'Home', 
                            posts = posts, 

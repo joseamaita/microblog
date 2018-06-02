@@ -123,3 +123,50 @@ refreshes the page after submitting a web form.
 ![img](08-pagination-a.png)
 
 ![img](08-pagination-b.png)
+
+### Displaying Blog Posts
+
+If you recall, I created a couple of fake blog posts that I've been 
+displaying in the home page for a long time. These fake objects are 
+created explicitly in the `index` view function as a simple Python list:
+
+```python
+    posts = [
+        {
+            'author': {'username': 'John'},
+            'body': 'Beautiful day in Portland!'
+        },
+        {
+            'author': {'username': 'Susan'},
+            'body': 'The Avengers movie was so cool!'
+        }
+    ]
+```
+
+But now I have the `followed_posts()` method in the `User` model that 
+returns a query for the posts that a given user wants to see. So now I 
+can replace the fake posts with real posts:
+
+```python
+# app/routes.py: Display real posts in home page
+@app.route('/', methods=['GET', 'POST'])
+@app.route('/index', methods=['GET', 'POST'])
+@login_required
+def index():
+    # ...
+    posts = current_user.followed_posts().all()
+    return render_template('index.html', 
+                           title = 'Home', 
+                           posts = posts, 
+                           form = form)
+```
+
+The `followed_posts` method of the `User` class returns a SQLAlchemy 
+query object that is configured to grab the posts the user is interested 
+in from the database. Calling `all()` on this query triggers its 
+execution, with the return value being a list with all the results. So I 
+end up with a structure that is very much alike the one with fake posts 
+that I have been using until now. It's so close that the template does 
+not even need to change.
+
+![img](08-pagination-c.png)
