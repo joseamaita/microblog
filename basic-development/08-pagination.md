@@ -170,3 +170,109 @@ that I have been using until now. It's so close that the template does
 not even need to change.
 
 ![img](08-pagination-c.png)
+
+### Making It Easier to Find Users to Follow
+
+As I'm sure you noticed, the application as it is does not do a great 
+job at letting users find other users to follow. In fact, there is 
+actually no way to see what other users are there at all. I'm going to 
+address that with a few simple changes.
+
+I'm going to create a new page that I'm going to call the "Explore" 
+page. This page will work like the home page, but instead of only 
+showing posts from followed users, it will show a global post stream 
+from all users. Here is the new explore view function:
+
+```python
+# app/routes.py: Explore view function
+@app.route('/explore')
+@login_required
+def explore():
+    posts = Post.query.order_by(Post.timestamp.desc()).all()
+    return render_template('index.html', 
+                           title = 'Explore', 
+                           posts = posts)
+```
+
+Did you notice something odd in this view function? 
+The `render_template()` call references the *index.html* template, which 
+I'm using in the main page of the application. Since this page is going 
+to be very similar to the main page, I decided to reuse the template. 
+But one difference with the main page is that in the explore page I do 
+not want to have a form to write blog posts, so in this view function I 
+did not include the `form` argument in the template call.
+
+To prevent the *index.html* template from crashing when it tries to 
+render a web form that does not exist, I'm going to add a conditional 
+that only renders the form if it is defined:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Hi, {{ current_user.username }}!</h1>
+    {% if form %}
+    <form action="" method="post">
+        ...
+    </form>
+    {% endif %}
+    ...
+{% endblock %}
+```
+
+I'm also going to add a link to this new page in the navigation bar:
+
+```html
+            <a href="{{ url_for('explore') }}">Explore</a>
+```
+
+Remember the *_post.html* sub-template that I have introduced previously 
+to render blog posts in the user profile page? This was a small template 
+that was included from the user profile page template, and was separate 
+so that it can also be used from other templates. I'm now going to make 
+a small improvement to it, which is to show the username of the blog 
+post author as a link:
+
+```html
+    <table>
+        <tr valign="top">
+            <td><img src="{{ post.author.avatar(36) }}"></td>
+            <td>
+                <a href="{{ url_for('user', username=post.author.username) }}">
+                    {{ post.author.username }}
+                </a>
+                says:<br>{{ post.body }}
+            </td>
+        </tr>
+    </table>
+```
+
+I can now use this sub-template to render blog posts in the home and 
+explore pages:
+
+```html
+    ...
+    {% for post in posts %}
+        {% include '_post.html' %}
+    {% endfor %}
+    ...
+```
+
+The sub-template expects a variable named `post` to exist, and that is 
+how the loop variable in the index template is named, so that works 
+perfectly.
+
+With these small changes, the usability of the application has improved 
+considerably. Now a user can visit the explore page to read blog posts 
+from unknown users and based on those posts find new users to follow, 
+which can be done by simply clicking on a username to access the profile 
+page. Amazing, right?
+
+At this point I suggest you to try the application once again, so that 
+you experience these last user interface improvements.
+
+![img](08-pagination-d.png)
+
+![img](08-pagination-e.png)
+
+![img](08-pagination-f.png)

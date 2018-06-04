@@ -1,4 +1,4 @@
-# app/routes.py: Display real posts in home page
+# app/routes.py: Explore view function
 from flask import render_template, flash, redirect, url_for, request
 from app import app, db
 from app.forms import LoginForm, RegistrationForm, EditProfileForm, PostForm
@@ -125,3 +125,12 @@ def unfollow(username):
     db.session.commit()
     flash(f'You are not following {username}.')
     return redirect(url_for('user', username=username))
+
+
+@app.route('/explore')
+@login_required
+def explore():
+    posts = Post.query.order_by(Post.timestamp.desc()).all()
+    return render_template('index.html', 
+                           title = 'Explore', 
+                           posts = posts)
