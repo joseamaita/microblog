@@ -1,4 +1,4 @@
-# app/routes.py: Explore view function
+# app/routes.py: Pagination to the home and explore view functions
 from flask import render_template, flash, redirect, url_for, request
 from app import app, db
 from app.forms import LoginForm, RegistrationForm, EditProfileForm, PostForm
@@ -26,10 +26,12 @@ def index():
         db.session.commit()
         flash('Your post is now live!')
         return redirect(url_for('index'))
-    posts = current_user.followed_posts().all()
+    page = request.args.get('page', 1, type=int)
+    posts = current_user.followed_posts().paginate(
+        page, app.config['POSTS_PER_PAGE'], False)
     return render_template('index.html', 
                            title = 'Home', 
-                           posts = posts, 
+                           posts = posts.items, 
                            form = form)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -130,7 +132,9 @@ def unfollow(username):
 @app.route('/explore')
 @login_required
 def explore():
-    posts = Post.query.order_by(Post.timestamp.desc()).all()
+    page = request.args.get('page', 1, type=int)
+    posts = Post.query.order_by(Post.timestamp.desc()).paginate(
+        page, app.config['POSTS_PER_PAGE'], False)
     return render_template('index.html', 
                            title = 'Explore', 
-                           posts = posts)
+                           posts = posts.items)

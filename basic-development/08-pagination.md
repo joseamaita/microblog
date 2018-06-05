@@ -276,3 +276,123 @@ you experience these last user interface improvements.
 ![img](08-pagination-e.png)
 
 ![img](08-pagination-f.png)
+
+### Pagination of Blog Posts
+
+The application is looking better than ever, but showing all of the 
+followed posts in the home page is going to become a problem sooner 
+rather than later. What happens if a user has a thousand followed posts? 
+Or a million? As you can imagine, managing such a large list of posts 
+will be extremely slow and inefficient.
+
+To address that problem, I'm going to *paginate* the post list. This 
+means that initially I'm going to show just a limited number of posts at 
+a time, and include links to navigate through the entire list of posts. 
+Flask-SQLAlchemy supports pagination natively with the `paginate()` 
+query method. If for example, I want to get the first twenty followed 
+posts of the user, I can replace the `all()` call that terminates the 
+query with:
+
+```python
+>>> user.followed_posts().paginate(1, 20, False).items
+```
+
+The `paginate` method can be called on any query object from 
+Flask-SQLAlchemy. It takes three arguments:
+
+* the page number, starting from 1
+* the number of items per page
+* an error flag. If `True`, when an out of range page is requested a 404 
+error will be automatically returned to the client. If `False`, an empty 
+list will be returned for out of range pages.
+
+The return value from `paginate` is a `Pagination` object. The `items` 
+attribute of this object contains the list of items in the requested 
+page. There are other useful things in the `Pagination` object that I 
+will discuss later.
+
+Now let's think about how I can implement pagination in the `index()` 
+view function. I can start by adding a configuration item to the 
+application that determines how many items will be displayed per page.
+
+```python
+# config.py: Posts per page configuration
+class Config(object):
+    # ...
+    POSTS_PER_PAGE = 3
+```
+
+It is a good idea to have these application-wide "knobs" that can change 
+behaviors in the configuration file, because then I can go to a single 
+place to make adjustments. In the final application I will of course use 
+a larger number than three items per page, but for testing it is useful 
+to work with small numbers.
+
+Next, I need to decide how the page number is going to be incorporated 
+into application URLs. A fairly common way is to use a *query string* 
+argument to specify an optional page number, defaulting to page 1 if it 
+is not given. Here are some example URLs that show how I'm going to 
+implement this:
+
+* Page 1, implicit: *http://localhost:5000/index*
+* Page 1, explicit: *http://localhost:5000/index?page=1*
+* Page 3: *http://localhost:5000/index?page=3*
+
+To access arguments given in the query string, I can use the 
+Flask's `request.args` object. You have seen this already in previous 
+sections, where I implemented user login URLs from Flask-Login that can 
+include a `next` query string argument.
+
+Below you can see how I added pagination to the home and explore view 
+functions:
+
+```python
+# app/routes.py: Pagination to the home and explore view functions
+@app.route('/', methods=['GET', 'POST'])
+@app.route('/index', methods=['GET', 'POST'])
+@login_required
+def index():
+    # ...
+    page = request.args.get('page', 1, type=int)
+    posts = current_user.followed_posts().paginate(
+        page, app.config['POSTS_PER_PAGE'], False)
+    return render_template('index.html', 
+                           title = 'Home', 
+                           posts = posts.items, 
+                           form = form)
+
+@app.route('/explore')
+@login_required
+def explore():
+    page = request.args.get('page', 1, type=int)
+    posts = Post.query.order_by(Post.timestamp.desc()).paginate(
+        page, app.config['POSTS_PER_PAGE'], False)
+    return render_template("index.html", 
+                           title = 'Explore', 
+                           posts = posts.items)
+```
+
+With these changes, the two routes determine the page number to display, 
+either from the `page` query string argument or a default of 1, and then 
+use the `paginate()` method to retrieve only the desired page of 
+results. The `POSTS_PER_PAGE` configuration item that determines the 
+page size is accessed through the `app.config` object.
+
+Note how easy these changes are, and how little code is affected each 
+time a change is made. I am trying to write each part of the application 
+without making any assumptions about how the other parts work, and this 
+enables me to write modular and robust applications that are easier to 
+extend and to test, and are less likely to fail or have bugs.
+
+Go ahead and try the pagination support. First make sure you have more 
+than three blog posts. This is easier to see in the explore page, which 
+shows posts from all users. You are now going to see just the three most 
+recent posts. If you want to see the next three, 
+type *http://localhost:5000/explore?page=2* in your browser's address 
+bar.
+
+![img](08-pagination-g.png)
+
+![img](08-pagination-h.png)
+
+![img](08-pagination-i.png)

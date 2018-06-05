@@ -1,4 +1,4 @@
-# config.py: Email configuration
+# config.py: Posts per page configuration
 import secrets
 import os
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -14,3 +14,4 @@ class Config(object):
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
     ADMINS = ['j.maita@3leautomation.com']
+    POSTS_PER_PAGE = 3
