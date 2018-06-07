@@ -396,3 +396,100 @@ bar.
 ![img](08-pagination-h.png)
 
 ![img](08-pagination-i.png)
+
+### Page Navigation
+
+The next change is to add links at the bottom of the blog post list that 
+allow users to navigate to the next and/or previous pages. Remember that 
+I mentioned that the return value from a `paginate()` call is an object 
+of a `Pagination` class from Flask-SQLAlchemy? So far, I have used 
+the `items` attribute of this object, which contains the list of items 
+retrieved for the selected page. But this object has a few other 
+attributes that are useful when building pagination links:
+
+* `has_next`: `True` if there is at least one more page after the 
+current one.
+* `has_prev`: `True` if there is at least one more page before the 
+current one.
+* `next_num`: page number for the next page.
+* `prev_num`: page number for the previous page.
+
+With these four elements, I can generate next and previous page links 
+and pass them down to the templates for rendering:
+
+```python
+# app/routes.py: Next and previous page links
+@app.route('/', methods=['GET', 'POST'])
+@app.route('/index', methods=['GET', 'POST'])
+@login_required
+def index():
+    # ...
+    page = request.args.get('page', 1, type=int)
+    posts = current_user.followed_posts().paginate(
+        page, app.config['POSTS_PER_PAGE'], False)
+    next_url = url_for('index', page=posts.next_num) \
+        if posts.has_next else None
+    prev_url = url_for('index', page=posts.prev_num) \
+        if posts.has_prev else None
+    return render_template('index.html', 
+                           title = 'Home', 
+                           posts = posts.items, 
+                           form = form, 
+                           next_url = next_url, 
+                           prev_url = prev_url)
+
+@app.route('/explore')
+@login_required
+def explore():
+    page = request.args.get('page', 1, type=int)
+    posts = Post.query.order_by(Post.timestamp.desc()).paginate(
+        page, app.config['POSTS_PER_PAGE'], False)
+    next_url = url_for('explore', page=posts.next_num) \
+        if posts.has_next else None
+    prev_url = url_for('explore', page=posts.prev_num) \
+        if posts.has_prev else None
+    return render_template('index.html', 
+                           title = 'Explore', 
+                           posts = posts.items, 
+                           next_url = next_url, 
+                           prev_url = prev_url)
+```
+
+The `next_url` and `prev_url` in these two view functions are going to 
+be set to a URL returned by `url_for()` only if there is a page in that 
+direction. If the current page is at one of the ends of the collection 
+of posts, then the `has_next` or `has_prev` attributes of 
+the `Pagination` object will be `False`, and in that case the link in 
+that direction will be set to `None`.
+
+One interesting aspect of the `url_for()` function that I haven't 
+discussed before is that you can add any keyword arguments to it, and if 
+the names of those arguments are not referenced in the URL directly, 
+then Flask will include them in the URL as query arguments.
+
+The pagination links are being set to the *index.html* template, so now 
+let's render them on the page, right below the post list:
+
+```html
+   ...
+    {% for post in posts %}
+        {% include '_post.html' %}
+    {% endfor %}
+    {% if prev_url %}
+    <a href="{{ prev_url }}">Newer posts</a>
+    {% endif %}
+    {% if next_url %}
+    <a href="{{ next_url }}">Older posts</a>
+    {% endif %}
+    ...
+```
+
+This change adds links below the post list on both the index and 
+explore pages. The first link is labeled "Newer posts", and it points to 
+the previous page (keep in mind I'm showing posts sorted by newest 
+first, so the first page is the one with the newest content). The second 
+link is labeled "Older posts" and points to the next page of posts. If 
+any of these two links is `None`, then it is omitted from the page, 
+through a conditional.
+
+![img](08-pagination-j.png)

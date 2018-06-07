@@ -1,4 +1,4 @@
-# app/routes.py: Pagination to the home and explore view functions
+# app/routes.py: Next and previous page links
 from flask import render_template, flash, redirect, url_for, request
 from app import app, db
 from app.forms import LoginForm, RegistrationForm, EditProfileForm, PostForm
@@ -29,10 +29,16 @@ def index():
     page = request.args.get('page', 1, type=int)
     posts = current_user.followed_posts().paginate(
         page, app.config['POSTS_PER_PAGE'], False)
+    next_url = url_for('index', page=posts.next_num) \
+        if posts.has_next else None
+    prev_url = url_for('index', page=posts.prev_num) \
+        if posts.has_prev else None
     return render_template('index.html', 
                            title = 'Home', 
                            posts = posts.items, 
-                           form = form)
+                           form = form, 
+                           next_url = next_url, 
+                           prev_url = prev_url)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -135,6 +141,12 @@ def explore():
     page = request.args.get('page', 1, type=int)
     posts = Post.query.order_by(Post.timestamp.desc()).paginate(
         page, app.config['POSTS_PER_PAGE'], False)
+    next_url = url_for('explore', page=posts.next_num) \
+        if posts.has_next else None
+    prev_url = url_for('explore', page=posts.prev_num) \
+        if posts.has_prev else None
     return render_template('index.html', 
                            title = 'Explore', 
-                           posts = posts.items)
+                           posts = posts.items, 
+                           next_url = next_url, 
+                           prev_url = prev_url)
