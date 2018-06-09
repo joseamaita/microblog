@@ -8,3 +8,4 @@
 * Error Handling
 * Followers
 * Pagination
+* Email Support
