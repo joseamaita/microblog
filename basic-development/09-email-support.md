@@ -94,3 +94,29 @@ and if you are concerned about the security of your account, you can
 create a secondary account that you configure just for testing emails, 
 or you can enable less secure apps only temporarily to run your tests 
 and then revert back to the more secure default.
+
+### Flask-Mail Usage
+
+To learn how Flask-Mail works, I'll show you how to send an email from a 
+Python shell. So fire up Python with `flask shell`, and then run the 
+following commands:
+
+```python
+>>> from flask_mail import Message
+>>> from app import mail
+>>> msg = Message('test subject', sender=app.config['ADMINS'][0],
+... recipients=['your-email@example.com'])
+>>> msg.body = 'text body'
+>>> msg.html = '<h1>HTML body</h1>'
+>>> mail.send(msg)
+```
+
+The snippet of code above will send an email to a list of email 
+addresses that you put in the `recipients` argument. I put the sender as 
+the first configured admin (I've added the `ADMINS` configuration 
+variable in a previous section). The email will have plain text and HTML 
+versions, so depending on how your email client is configured you may 
+see one or the other.
+
+So as you see, this is pretty simple. Now let's integrate emails into 
+the application.
