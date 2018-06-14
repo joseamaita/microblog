@@ -143,3 +143,90 @@ Flask-Mail supports some features that I'm not utilizing here such as Cc
 and Bcc lists. Be sure to check 
 the [Flask-Mail](https://pythonhosted.org/Flask-Mail/) documentation if 
 you are interested in those options.
+
+### Requesting a Password Reset
+
+As I mentioned above, I want users to have the option to request their 
+password to be reset. For this purpose I'm going to add a link in the 
+login page:
+
+```html
+    ...
+    <p>
+        Forgot Your Password?
+        <a href="{{ url_for('reset_password_request') }}">Click to Reset It</a>
+    </p>
+    ...
+```
+
+When the user clicks the link, a new web form will appear that requests 
+the user's email address as a way to initiate the password reset 
+process. Here is the form class:
+
+```python
+# app/forms.py: Reset password request form
+class ResetPasswordRequestForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    submit = SubmitField('Request Password Reset')
+```
+
+And here is the corresponding HTML template 
+in *app/templates/reset_password_request.html*:
+
+```html
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Reset Password</h1>
+    <form action="" method="post">
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.email.label }}<br>
+            {{ form.email(size=64) }}<br>
+            {% for error in form.email.errors %}
+            <span style="color: red;">[{{ error }}]</span>
+            {% endfor %}
+        </p>
+        <p>{{ form.submit() }}</p>
+    </form>
+{% endblock %}
+```
+
+I also need a view function to handle this form:
+
+```python
+# app/routes.py: Reset password request view function
+from app.forms import ResetPasswordRequestForm
+from app.email import send_password_reset_email
+
+@app.route('/reset_password_request', methods=['GET', 'POST'])
+def reset_password_request():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = ResetPasswordRequestForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user:
+            send_password_reset_email(user)
+        flash('Check your email for the instructions to reset your password')
+        return redirect(url_for('login'))
+    return render_template('reset_password_request.html', 
+                           title = 'Reset Password', 
+                           form = form)
+```
+
+This view function is fairly similar to others that process a form. I 
+start by making sure the user is not logged in. If the user is logged 
+in, then there is no point in using the password reset functionality, so 
+I redirect to the index page.
+
+When the form is submitted and valid, I look up the user by the email 
+provided by the user in the form. If I find the user, I send a password 
+reset email. I'm using a `send_password_reset_email()` helper function 
+to do this. I will show you this function below.
+
+After the email is sent, I flash a message directing the user to look 
+for the email for further instructions, and then redirect back to the 
+login page. You may notice that the flashed message is displayed even if 
+the email provided by the user is unknown. This is so that clients 
+cannot use this form to figure out if a given user is a member or not.
