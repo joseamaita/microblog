@@ -120,3 +120,26 @@ see one or the other.
 
 So as you see, this is pretty simple. Now let's integrate emails into 
 the application.
+
+### A Simple Email Framework
+
+I will begin by writing a helper function that sends an email, which is 
+basically a generic version of the shell exercise from the previous 
+section. I will put this function in a new module called *app/email.py*:
+
+```python
+# app/email.py: Email sending wrapper function
+from flask_mail import Message
+from app import mail
+
+def send_email(subject, sender, recipients, text_body, html_body):
+    msg = Message(subject, sender=sender, recipients=recipients)
+    msg.body = text_body
+    msg.html = html_body
+    mail.send(msg)
+```
+
+Flask-Mail supports some features that I'm not utilizing here such as Cc 
+and Bcc lists. Be sure to check 
+the [Flask-Mail](https://pythonhosted.org/Flask-Mail/) documentation if 
+you are interested in those options.
